@@ -1,20 +1,19 @@
-/// LevelModel — the data-layer representation of a level as returned by
-/// the backend's GET /api/levels endpoint.
+import '../../domain/models/board.dart';
+
+/// LevelModel — the data-layer representation of a level from the
+/// backend's GET /api/levels endpoint.
 ///
-/// This is a MINIMAL first version: just the scalar fields, so we can
-/// prove the app can talk to the backend and parse a response. The
-/// board (rows, cols, cells) is added in the next step once the round
-/// trip works.
-///
-/// `fromJson` is the standard Dart pattern for turning a decoded JSON
-/// map into a typed object — the app-side mirror of the backend's
-/// LevelResponseDto.from().
+/// Beyond the scalar fields, it now carries the playable Board, built
+/// from the backend's board JSON via Board.fromJson (which runs the
+/// CellFactory on each cell). This is the seam where flat backend data
+/// becomes the app's polymorphic domain.
 class LevelModel {
   final String id;
   final int index;
   final String difficulty;
   final int parTimeMs;
   final bool published;
+  final Board board;
 
   LevelModel({
     required this.id,
@@ -22,6 +21,7 @@ class LevelModel {
     required this.difficulty,
     required this.parTimeMs,
     required this.published,
+    required this.board,
   });
 
   factory LevelModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +31,7 @@ class LevelModel {
       difficulty: json['difficulty'] as String,
       parTimeMs: json['parTimeMs'] as int,
       published: json['published'] as bool,
+      board: Board.fromJson(json['board'] as Map<String, dynamic>),
     );
   }
 }
