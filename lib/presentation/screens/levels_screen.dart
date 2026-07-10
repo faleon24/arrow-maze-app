@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../data/api/level_api.dart';
+import '../../data/api/progress_api.dart';
 import '../../data/models/level_model.dart';
-import 'game_screen.dart';
 import '../../data/auth_storage.dart';
+import 'game_screen.dart';
 import 'login_screen.dart';
 
-/// LevelsScreen — the first real screen: it loads the level catalog
-/// from the backend and lists it.
+/// LevelsScreen — loads the level catalog and the player's progress, and
+/// lists each level with the stars earned so far.
 ///
-/// It is a StatefulWidget because it moves through states: while the
-/// HTTP call is in flight it shows a spinner; on success it shows the
-/// list; on failure it shows the error. This loading/success/error
-/// shape is the standard way to present data fetched from an API.
+/// It fetches both the public levels and the authenticated progress in
+/// parallel, then cross-references them: each row shows how many of 3
+/// stars the player has earned on that level (empty if never cleared).
 class LevelsScreen extends StatefulWidget {
   const LevelsScreen({super.key});
 
@@ -20,24 +20,48 @@ class LevelsScreen extends StatefulWidget {
   State<LevelsScreen> createState() => _LevelsScreenState();
 }
 
-class _LevelsScreenState extends State<LevelsScreen> {
-  final LevelApi _api = LevelApi();
+/// Bundles the two things the screen needs, loaded together.
+class _LevelsData {
+  final List<LevelModel> levels;
+  final Map<String, int> starsByLevel;
+  _LevelsData(this.levels, this.starsByLevel);
+}
 
-  // The future that produces the levels. FutureBuilder (below) listens
-  // to it and rebuilds the UI as it resolves.
-  late Future<List<LevelModel>> _levelsFuture;
+class _LevelsScreenState extends State<LevelsScreen> {
+  final LevelApi _levelApi = LevelApi();
+  final ProgressApi _progressApi = ProgressApi();
+
+  late Future<_LevelsData> _dataFuture;
 
   @override
   void initState() {
     super.initState();
-    // Kick off the fetch once, when the screen is first created.
-    _levelsFuture = _api.fetchLevels();
+    _dataFuture = _load();
+  }
+
+  /// Load levels and progress together. If progress fails (e.g. token
+  /// issue) we still show the levels, just without stars.
+  Future<_LevelsData> _load() async {
+    final levels = await _levelApi.fetchLevels();
+    Map<String, int> stars = {};
+    try {
+      stars = await _progressApi.fetchStarsByLevel();
+    } catch (_) {
+      // Non-fatal: show the catalog without stars.
+    }
+    return _LevelsData(levels, stars);
+  }
+
+  void _reload() {
+    setState(() {
+      _dataFuture = _load();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-     appBar: AppBar(
+      appBar: AppBar(
         title: const Text('Arrow Maze — Levels'),
         actions: [
           IconButton(
@@ -54,15 +78,13 @@ class _LevelsScreenState extends State<LevelsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<LevelModel>>(
-        future: _levelsFuture,
+      body: FutureBuilder<_LevelsData>(
+        future: _dataFuture,
         builder: (context, snapshot) {
-          // 1. Still loading.
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // 2. Something went wrong.
           if (snapshot.hasError) {
             return Center(
               child: Padding(
@@ -72,8 +94,10 @@ class _LevelsScreenState extends State<LevelsScreen> {
             );
           }
 
-          // 3. Data is ready.
-          final levels = snapshot.data ?? [];
+          final data = snapshot.data;
+          final levels = data?.levels ?? [];
+          final starsByLevel = data?.starsByLevel ?? {};
+
           if (levels.isEmpty) {
             return const Center(child: Text('No levels published yet.'));
           }
@@ -82,23 +106,61 @@ class _LevelsScreenState extends State<LevelsScreen> {
             itemCount: levels.length,
             itemBuilder: (context, i) {
               final level = levels[i];
+              final earned = starsByLevel[level.id]; // null if not cleared
+
               return ListTile(
                 leading: CircleAvatar(child: Text('${level.index + 1}')),
                 title: Text('Level ${level.index + 1}'),
-                subtitle: Text(
-                  '${level.difficulty} · par ${level.parTimeMs ~/ 1000}s',
+                subtitle: Row(
+                  children: [
+                    Text(level.difficulty),
+                    const SizedBox(width: 8),
+                    _StarRow(earned: earned),
+                  ],
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => GameScreen(level: level)),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => GameScreen(
+                        level: level,
+                        catalog: levels,
+                        indexInCatalog: i,
+                      ),
+                    ),
                   );
+                  // Coming back from a game: refresh so new stars show.
+                  _reload();
                 },
               );
             },
           );
         },
       ),
+    );
+  }
+}
+
+/// Shows three star icons: filled for stars earned, outlined for the
+/// rest. If [earned] is null (never cleared), all three are outlined.
+class _StarRow extends StatelessWidget {
+  final int? earned;
+
+  const _StarRow({required this.earned});
+
+  @override
+  Widget build(BuildContext context) {
+    final count = earned ?? 0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (i) {
+        final filled = i < count;
+        return Icon(
+          filled ? Icons.star : Icons.star_border,
+          size: 18,
+          color: filled ? Colors.amber : Colors.grey,
+        );
+      }),
     );
   }
 }
