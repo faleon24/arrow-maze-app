@@ -15,7 +15,23 @@ import '../widgets/cell_widget.dart';
 class GameScreen extends StatefulWidget {
   final LevelModel level;
 
-  const GameScreen({super.key, required this.level});
+  // The full catalog and this level's position in it, so the game can
+  // offer "next level" on a win. Optional: if not provided, no next.
+  final List<LevelModel>? catalog;
+  final int? indexInCatalog;
+
+  const GameScreen({
+    super.key,
+    required this.level,
+    this.catalog,
+    this.indexInCatalog,
+  });
+
+  LevelModel? get nextLevel {
+    if (catalog == null || indexInCatalog == null) return null;
+    final next = indexInCatalog! + 1;
+    return next < catalog!.length ? catalog![next] : null;
+  }
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -109,7 +125,7 @@ class _GameScreenState extends State<GameScreen> {
                   '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
               : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
         ),
-        actions: [
+actions: [
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
@@ -124,6 +140,24 @@ class _GameScreenState extends State<GameScreen> {
             },
             child: const Text('Play again'),
           ),
+          // Only on a win, and only if there is a next level.
+          if (won && widget.nextLevel != null)
+            FilledButton(
+              onPressed: () {
+                final next = widget.nextLevel!;
+                Navigator.of(context).pop(); // close dialog
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => GameScreen(
+                      level: next,
+                      catalog: widget.catalog,
+                      indexInCatalog: widget.indexInCatalog! + 1,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Next level'),
+            ),
         ],
       ),
     );
@@ -188,14 +222,22 @@ class _StatusBar extends StatelessWidget {
 
   const _StatusBar({required this.session});
 
-  @override
+ @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _Stat(label: 'Arrows left', value: '${session.arrowsRemaining}'),
-        _Stat(label: 'Moves', value: '${session.movesUsed} / ${session.moveLimit}'),
-        _Stat(label: 'Lives', value: '${session.lives}'),
+        Expanded(
+          child: _Stat(label: 'Arrows left', value: '${session.arrowsRemaining}'),
+        ),
+        Expanded(
+          child: _Stat(
+            label: 'Moves',
+            value: '${session.movesUsed} / ${session.moveLimit}',
+          ),
+        ),
+        Expanded(
+          child: _Stat(label: 'Lives', value: '${session.lives}'),
+        ),
       ],
     );
   }
