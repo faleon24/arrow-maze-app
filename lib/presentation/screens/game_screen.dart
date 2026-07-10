@@ -4,15 +4,14 @@ import '../../data/models/level_model.dart';
 import '../../domain/models/cell.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/position.dart';
+import '../../data/api/progress_api.dart';
 import '../widgets/cell_widget.dart';
 
 /// GameScreen — the playable board for a single level.
 ///
 /// Wraps the level's board in a GameSession (the tested domain rules) and
-/// turns taps into moves: tapping a clearable arrow sends it off the
-/// board; tapping a blocked one costs a life. It shows moves and lives,
-/// and ends the game on a cleared board (win) or when lives/moves run out
-/// (lose).
+/// turns taps into moves. On a win it submits the run to the backend and
+/// shows the result; on a loss it offers a retry.
 class GameScreen extends StatefulWidget {
   final LevelModel level;
 
@@ -24,9 +23,13 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
+  final ProgressApi _progressApi = ProgressApi();
 
   // The position briefly flashed red after a blocked tap.
   Position? _blockedFlash;
+
+  // A message if saving the score failed (offline, token expired, etc.).
+  String? _saveError;
 
   @override
   void initState() {
@@ -35,8 +38,6 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _startSession() {
-    // A generous move limit based on the number of arrows: every arrow
-    // needs at least one move, plus some slack for mistakes.
     final arrowCount = widget.level.board.arrows.length;
     _session = GameSession(
       board: widget.level.board,
@@ -44,6 +45,7 @@ class _GameScreenState extends State<GameScreen> {
       maxLives: 3,
     );
     _blockedFlash = null;
+    _saveError = null;
   }
 
   void _onCellTapped(Position position) {
@@ -59,7 +61,6 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
-    // Clear the red flash shortly after a blocked tap.
     if (outcome == TapOutcome.blocked) {
       Future.delayed(const Duration(milliseconds: 350), () {
         if (mounted) setState(() => _blockedFlash = null);
@@ -68,10 +69,31 @@ class _GameScreenState extends State<GameScreen> {
 
     // Check for end of game after the move.
     if (_session.isCleared) {
-      _showEndDialog(won: true);
+      _submitAndShowWin();
     } else if (_session.isFailed) {
       _showEndDialog(won: false);
     }
+  }
+
+  /// On a win, submit the run to the backend (best score is kept there),
+  /// then show the win dialog. A failed save doesn't block the dialog —
+  /// the player still cleared the level; we just note it couldn't sync.
+  Future<void> _submitAndShowWin() async {
+    _saveError = null;
+
+    try {
+      await _progressApi.submitScore(
+        levelId: widget.level.id,
+        moves: _session.movesUsed,
+        // No timer in this game; send 0 as an informational placeholder.
+        timeMs: 0,
+        stars: _session.starsEarned,
+      );
+    } catch (e) {
+      _saveError = e.toString().replaceFirst('Exception: ', '');
+    }
+
+    if (mounted) _showEndDialog(won: true);
   }
 
   void _showEndDialog({required bool won}) {
@@ -82,21 +104,23 @@ class _GameScreenState extends State<GameScreen> {
         title: Text(won ? 'Level cleared! 🎉' : 'Out of moves'),
         content: Text(
           won
-              ? 'You cleared the board in ${_session.movesUsed} moves.'
+              ? 'You cleared the board in ${_session.movesUsed} moves.\n'
+                  'Stars earned: ${'⭐' * _session.starsEarned}\n'
+                  '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
               : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
         ),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(); // close dialog
-              Navigator.of(context).pop(); // back to level list
+              Navigator.of(context).pop();
+              Navigator.of(context).pop();
             },
             child: const Text('Back to levels'),
           ),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(); // close dialog
-              setState(_startSession); // restart this level
+              Navigator.of(context).pop();
+              setState(_startSession);
             },
             child: const Text('Play again'),
           ),

@@ -89,6 +89,12 @@ class GameSession {
   /// How many arrows are still on the board.
   int get arrowsRemaining => board.arrows.length;
 
+  int get starsEarned {
+    final livesLost = maxLives - lives;
+    final stars = 3 - livesLost;
+    return stars < 1 ? 1 : stars;
+  }
+
   // ---------- Internal ----------
 
   /// Remove an arrow by rebuilding the board's cell map without it. The
