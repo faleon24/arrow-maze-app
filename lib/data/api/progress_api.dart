@@ -43,4 +43,33 @@ class ProgressApi {
       throw Exception('Failed to submit score (HTTP ${response.statusCode})');
     }
   }
+
+  /// Fetch the player's progress as a map of levelId -> stars, so the
+  /// levels list can show how many stars each level was cleared with.
+  /// Returns an empty map if the user has no progress yet.
+  Future<Map<String, int>> fetchStarsByLevel() async {
+    final token = await _storage.readToken();
+    if (token == null) {
+      throw Exception('Not signed in');
+    }
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/me/progress'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load progress (HTTP ${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final entries = decoded['entries'] as List<dynamic>;
+
+    final result = <String, int>{};
+    for (final entry in entries) {
+      final map = entry as Map<String, dynamic>;
+      result[map['levelId'] as String] = map['stars'] as int;
+    }
+    return result;
+  }
 }
