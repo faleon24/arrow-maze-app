@@ -41,4 +41,18 @@ class Board {
   Cell cellAt(Position position) {
     return cells[position] ?? EmptyCell(position);
   }
+
+  /// Whether a position falls inside the grid bounds.
+  bool contains(Position position) {
+    return position.row >= 0 &&
+        position.row < rows &&
+        position.col >= 0 &&
+        position.col < cols;
+  }
+
+  /// Every arrow currently on the board, with its position.
+  Iterable<ArrowCell> get arrows =>
+      cells.values.whereType<ArrowCell>();
+
+      
 }
