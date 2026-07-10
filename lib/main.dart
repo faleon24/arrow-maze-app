@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'presentation/screens/levels_screen.dart';
+import 'presentation/screens/auth_gate.dart';
 
 void main() {
   runApp(const ArrowMazeApp());
@@ -19,7 +19,7 @@ class ArrowMazeApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const LevelsScreen(),
+      home: const AuthGate(),
     );
   }
 }

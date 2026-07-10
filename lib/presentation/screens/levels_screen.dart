@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../data/api/level_api.dart';
 import '../../data/models/level_model.dart';
 import 'game_screen.dart';
+import '../../data/auth_storage.dart';
+import 'login_screen.dart';
 
 /// LevelsScreen — the first real screen: it loads the level catalog
 /// from the backend and lists it.
@@ -35,7 +37,23 @@ class _LevelsScreenState extends State<LevelsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Arrow Maze — Levels')),
+     appBar: AppBar(
+        title: const Text('Arrow Maze — Levels'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sign out',
+            onPressed: () async {
+              await AuthStorage().clearToken();
+              if (!context.mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
       body: FutureBuilder<List<LevelModel>>(
         future: _levelsFuture,
         builder: (context, snapshot) {
