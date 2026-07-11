@@ -70,6 +70,9 @@ class _GameScreenState extends State<GameScreen> {
     );
     _blockedFlash = null;
     _saveError = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _session.isCleared) _submitAndShowWin();
+    });
   }
 
   void _onCellTapped(Position position) {
