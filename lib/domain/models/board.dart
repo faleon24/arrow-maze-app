@@ -13,11 +13,7 @@ class Board {
   final int cols;
   final Map<Position, Cell> cells;
 
-  const Board({
-    required this.rows,
-    required this.cols,
-    required this.cells,
-  });
+  const Board({required this.rows, required this.cols, required this.cells});
 
   /// Build a Board from the backend's board JSON:
   /// { "rows": 3, "cols": 3, "cells": [ {...}, {...} ] }.
@@ -51,8 +47,5 @@ class Board {
   }
 
   /// Every arrow currently on the board, with its position.
-  Iterable<ArrowCell> get arrows =>
-      cells.values.whereType<ArrowCell>();
-
-      
+  Iterable<ArrowCell> get arrows => cells.values.whereType<ArrowCell>();
 }

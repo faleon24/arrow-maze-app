@@ -54,12 +54,12 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     _startSession();
   }
+
   @override
   void dispose() {
     _flashTimer?.cancel();
     super.dispose();
   }
-
 
   void _startSession() {
     final arrowCount = widget.level.board.arrows.length;
@@ -88,7 +88,7 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
-   if (outcome == TapOutcome.blocked) {
+    if (outcome == TapOutcome.blocked) {
       _flashTimer?.cancel();
       _flashTimer = Timer(const Duration(milliseconds: 350), () {
         if (mounted) setState(() => _blockedFlash = null);
@@ -130,7 +130,7 @@ class _GameScreenState extends State<GameScreen> {
     if (mounted) _showEndDialog(won: true);
   }
 
-void _showEndDialog({required bool won}) {
+  void _showEndDialog({required bool won}) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -144,8 +144,8 @@ void _showEndDialog({required bool won}) {
           content: Text(
             won
                 ? 'You cleared the board in ${_session.movesUsed} moves.\n'
-                    'Stars earned: ${'⭐' * _session.starsEarned}\n'
-                    '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
+                      'Stars earned: ${'⭐' * _session.starsEarned}\n'
+                      '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
                 : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
           ),
           actions: [
@@ -193,7 +193,9 @@ void _showEndDialog({required bool won}) {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Level ${widget.level.index + 1} · ${widget.level.difficulty}'),
+        title: Text(
+          'Level ${widget.level.index + 1} · ${widget.level.difficulty}',
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -246,12 +248,15 @@ class _StatusBar extends StatelessWidget {
 
   const _StatusBar({required this.session});
 
- @override
+  @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: _Stat(label: 'Arrows left', value: '${session.arrowsRemaining}'),
+          child: _Stat(
+            label: 'Arrows left',
+            value: '${session.arrowsRemaining}',
+          ),
         ),
         Expanded(
           child: _Stat(

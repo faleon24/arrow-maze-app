@@ -39,12 +39,11 @@ class _LevelsScreenState extends State<LevelsScreen> {
     _dataFuture = _load();
   }
 
-  
   Future<_LevelsData> _load() async {
     final levelsFuture = _levelApi.fetchLevels();
-    final starsFuture = _progressApi
-        .fetchStarsByLevel()
-        .catchError((Object _) => <String, int>{});
+    final starsFuture = _progressApi.fetchStarsByLevel().catchError(
+      (Object _) => <String, int>{},
+    );
     return _LevelsData(await levelsFuture, await starsFuture);
   }
 

@@ -10,6 +10,7 @@ class TapOutcome {
   static const blocked = TapOutcome._('BLOCKED');
   static const notAnArrow = TapOutcome._('NOT_AN_ARROW');
 }
+
 /// GameSession — the state and rules of a single play-through of a level.
 ///
 /// This is the heart of Arrow Maze. The board is full of arrows; the
@@ -30,12 +31,9 @@ class GameSession {
   int movesUsed;
   int lives;
 
-  GameSession({
-    required this.board,
-    required this.moveLimit,
-    this.maxLives = 3,
-  })  : movesUsed = 0,
-        lives = maxLives;
+  GameSession({required this.board, required this.moveLimit, this.maxLives = 3})
+    : movesUsed = 0,
+      lives = maxLives;
 
   /// Is the arrow at this position free to escape? True only if the cell
   /// holds an arrow AND every cell along its exit ray (to the edge) is
@@ -83,8 +81,7 @@ class GameSession {
 
   /// The game is lost if lives run out or the move limit is reached with
   /// arrows still on the board.
-  bool get isFailed =>
-      !isCleared && (lives <= 0 || movesUsed >= moveLimit);
+  bool get isFailed => !isCleared && (lives <= 0 || movesUsed >= moveLimit);
 
   /// How many arrows are still on the board.
   int get arrowsRemaining => board.arrows.length;

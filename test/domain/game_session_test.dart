@@ -25,7 +25,10 @@ void main() {
         rows: 1,
         cols: 3,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10);
@@ -40,8 +43,14 @@ void main() {
         rows: 1,
         cols: 4,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
-          const Position(0, 2): ArrowCell(const Position(0, 2), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
+          const Position(0, 2): ArrowCell(
+            const Position(0, 2),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10);
@@ -56,8 +65,14 @@ void main() {
         rows: 1,
         cols: 4,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
-          const Position(0, 2): ArrowCell(const Position(0, 2), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
+          const Position(0, 2): ArrowCell(
+            const Position(0, 2),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10);
@@ -80,7 +95,10 @@ void main() {
         rows: 2,
         cols: 1,
         cells: {
-          const Position(1, 0): ArrowCell(const Position(1, 0), DownDirection()),
+          const Position(1, 0): ArrowCell(
+            const Position(1, 0),
+            DownDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10);
@@ -95,7 +113,10 @@ void main() {
         rows: 1,
         cols: 2,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10);
@@ -112,8 +133,14 @@ void main() {
         rows: 1,
         cols: 4,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
-          const Position(0, 2): ArrowCell(const Position(0, 2), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
+          const Position(0, 2): ArrowCell(
+            const Position(0, 2),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10, maxLives: 3);
@@ -132,8 +159,14 @@ void main() {
         rows: 1,
         cols: 4,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
-          const Position(0, 2): ArrowCell(const Position(0, 2), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
+          const Position(0, 2): ArrowCell(
+            const Position(0, 2),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10);
@@ -152,7 +185,10 @@ void main() {
         rows: 1,
         cols: 2,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10);
@@ -168,8 +204,14 @@ void main() {
         rows: 1,
         cols: 4,
         cells: {
-          const Position(0, 0): ArrowCell(const Position(0, 0), RightDirection()),
-          const Position(0, 2): ArrowCell(const Position(0, 2), RightDirection()),
+          const Position(0, 0): ArrowCell(
+            const Position(0, 0),
+            RightDirection(),
+          ),
+          const Position(0, 2): ArrowCell(
+            const Position(0, 2),
+            RightDirection(),
+          ),
         },
       );
       final session = GameSession(board: board, moveLimit: 10, maxLives: 1);

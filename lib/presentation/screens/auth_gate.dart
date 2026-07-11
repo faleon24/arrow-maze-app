@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/auth_storage.dart';
 import 'login_screen.dart';
 import 'levels_screen.dart';
+
 /// AuthGate — the app's entry point.
 ///
 /// Checks for a stored, non-expired session and routes accordingly:
@@ -16,6 +17,7 @@ class AuthGate extends StatefulWidget {
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
+
 class _AuthGateState extends State<AuthGate> {
   final _storage = AuthStorage();
   late Future<bool> _hasValidSessionFuture;
@@ -24,6 +26,7 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     _hasValidSessionFuture = _hasValidSession();
   }
+
   Future<bool> _hasValidSession() async {
     final token = await _storage.readToken();
     if (token == null || token.isEmpty) return false;
@@ -36,6 +39,7 @@ class _AuthGateState extends State<AuthGate> {
     }
     return true;
   }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(

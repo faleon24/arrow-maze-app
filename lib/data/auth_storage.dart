@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+
 /// AuthStorage — persists the authenticated session (token + expiry)
 /// across app launches using shared_preferences.
 ///
@@ -14,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthStorage {
   static const _tokenKey = 'auth_token';
   static const _expiresAtKey = 'auth_expires_at';
+
   /// Persist a full authenticated session after a successful login or
   /// register. Token and expiry are stored together so a partial state
   /// (token without expiry, or vice versa) is unreachable.
@@ -25,6 +27,7 @@ class AuthStorage {
     await prefs.setString(_tokenKey, token);
     await prefs.setInt(_expiresAtKey, expiresAt.millisecondsSinceEpoch);
   }
+
   /// Read the stored token, or null if the user is not signed in.
   /// Vigencia is NOT enforced here — callers that care about expiry
   /// (AuthGate, hypothetically ProgressApi) also read readExpiresAt.
@@ -32,12 +35,14 @@ class AuthStorage {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_tokenKey);
   }
+
   /// Read the persisted expiry, or null if none is stored.
   Future<DateTime?> readExpiresAt() async {
     final prefs = await SharedPreferences.getInstance();
     final ms = prefs.getInt(_expiresAtKey);
     return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
   }
+
   /// Remove every trace of the persisted session (log out).
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();

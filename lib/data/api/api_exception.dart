@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+
 /// ApiException — the typed exception every data-layer HTTP client
 /// throws on a non-success response. Carries the backend's message
 /// verbatim (so the UI can show why) and the HTTP status (so callers
@@ -13,6 +14,7 @@ class ApiException implements Exception {
   final String message;
   final int statusCode;
   const ApiException(this.message, this.statusCode);
+
   /// Build a typed exception from a failed HTTP response. Reads the
   /// backend's `message` field when the body is JSON with one; falls
   /// back to a generic HTTP-status line otherwise. If the status is
@@ -20,7 +22,8 @@ class ApiException implements Exception {
   /// 0.B.4) can force a sign-out without every call site inspecting
   /// status codes.
   factory ApiException.fromResponse(http.Response response) {
-    final message = _extractMessage(response) ??
+    final message =
+        _extractMessage(response) ??
         'Request failed (HTTP ${response.statusCode})';
     if (response.statusCode == 401) {
       return UnauthorizedException(message);
@@ -30,6 +33,7 @@ class ApiException implements Exception {
   @override
   String toString() => message;
 }
+
 /// UnauthorizedException — a 401 from the backend, or a missing local
 /// token before the request even fires. Catching this separately is
 /// the pattern PLAN-MASTER 0.B.4 will use to force a global sign-out
@@ -38,6 +42,7 @@ class ApiException implements Exception {
 class UnauthorizedException extends ApiException {
   const UnauthorizedException(String message) : super(message, 401);
 }
+
 String? _extractMessage(http.Response response) {
   try {
     final decoded = jsonDecode(response.body);

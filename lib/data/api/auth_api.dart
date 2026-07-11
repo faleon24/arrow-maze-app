@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/auth_response.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
+
 /// AuthApi — the data-layer client for the backend's /auth endpoints.
 ///
 /// On a non-2xx status it throws an ApiException carrying the backend's
@@ -21,15 +22,14 @@ class AuthApi {
       'displayName': displayName,
     });
   }
+
   Future<AuthResponse> login({
     required String email,
     required String password,
   }) async {
-    return _post('/auth/login', {
-      'email': email,
-      'password': password,
-    });
+    return _post('/auth/login', {'email': email, 'password': password});
   }
+
   Future<AuthResponse> _post(String path, Map<String, dynamic> body) async {
     final response = await http
         .post(

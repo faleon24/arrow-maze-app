@@ -1,6 +1,7 @@
 import 'cell.dart';
 import 'direction.dart';
 import 'position.dart';
+
 /// DirectionFactory — Factory Method that turns the backend's direction
 /// label ("UP"/"DOWN"/"LEFT"/"RIGHT") into the matching Direction
 /// strategy instance. Callers depend only on the abstract Direction, so
@@ -21,6 +22,7 @@ class DirectionFactory {
     }
   }
 }
+
 /// CellFactory — Factory Method (GoF, creational). The app-side twin of
 /// the backend's DifficultyProfileFactory.
 ///

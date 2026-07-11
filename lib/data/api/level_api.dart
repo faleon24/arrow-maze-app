@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/level_model.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
+
 /// LevelApi — the data-layer client that talks to the backend's levels
 /// endpoint. Public route: no token required.
 class LevelApi {

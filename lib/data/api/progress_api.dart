@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../auth_storage.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
+
 /// ProgressApi — the data-layer client for the protected /me/progress
 /// endpoints. Every call must carry the bearer token; if the token is
 /// missing locally or the backend returns 401, an UnauthorizedException
@@ -38,6 +39,7 @@ class ProgressApi {
       throw ApiException.fromResponse(response);
     }
   }
+
   Future<Map<String, int>> fetchStarsByLevel() async {
     final token = await _storage.readToken();
     if (token == null) {
