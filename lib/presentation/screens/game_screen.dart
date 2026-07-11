@@ -127,53 +127,59 @@ class _GameScreenState extends State<GameScreen> {
     if (mounted) _showEndDialog(won: true);
   }
 
-  void _showEndDialog({required bool won}) {
+void _showEndDialog({required bool won}) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(won ? 'Level cleared! 🎉' : 'Out of moves'),
-        content: Text(
-          won
-              ? 'You cleared the board in ${_session.movesUsed} moves.\n'
-                  'Stars earned: ${'⭐' * _session.starsEarned}\n'
-                  '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
-              : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
-        ),
-actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('Back to levels'),
+      builder: (context) => PopScope(
+        // Deny system back / swipe-back while the dialog is up. Without
+        // this, Android would pop the dialog and leave the player on a
+        // frozen game screen with no way forward.
+        canPop: false,
+        child: AlertDialog(
+          title: Text(won ? 'Level cleared! 🎉' : 'Out of moves'),
+          content: Text(
+            won
+                ? 'You cleared the board in ${_session.movesUsed} moves.\n'
+                    'Stars earned: ${'⭐' * _session.starsEarned}\n'
+                    '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
+                : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              setState(_startSession);
-            },
-            child: const Text('Play again'),
-          ),
-          // Only on a win, and only if there is a next level.
-          if (won && widget.nextLevel != null)
-            FilledButton(
+          actions: [
+            TextButton(
               onPressed: () {
-                final next = widget.nextLevel!;
-                Navigator.of(context).pop(); // close dialog
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => GameScreen(
-                      level: next,
-                      catalog: widget.catalog,
-                      indexInCatalog: widget.indexInCatalog! + 1,
-                    ),
-                  ),
-                );
+                Navigator.of(context).pop();
+                Navigator.of(context).pop();
               },
-              child: const Text('Next level'),
+              child: const Text('Back to levels'),
             ),
-        ],
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(_startSession);
+              },
+              child: const Text('Play again'),
+            ),
+            // Only on a win, and only if there is a next level.
+            if (won && widget.nextLevel != null)
+              FilledButton(
+                onPressed: () {
+                  final next = widget.nextLevel!;
+                  Navigator.of(context).pop(); // close dialog
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => GameScreen(
+                        level: next,
+                        catalog: widget.catalog,
+                        indexInCatalog: widget.indexInCatalog! + 1,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Next level'),
+              ),
+          ],
+        ),
       ),
     );
   }
