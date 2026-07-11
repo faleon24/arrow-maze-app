@@ -39,17 +39,13 @@ class _LevelsScreenState extends State<LevelsScreen> {
     _dataFuture = _load();
   }
 
-  /// Load levels and progress together. If progress fails (e.g. token
-  /// issue) we still show the levels, just without stars.
+  
   Future<_LevelsData> _load() async {
-    final levels = await _levelApi.fetchLevels();
-    Map<String, int> stars = {};
-    try {
-      stars = await _progressApi.fetchStarsByLevel();
-    } catch (_) {
-      // Non-fatal: show the catalog without stars.
-    }
-    return _LevelsData(levels, stars);
+    final levelsFuture = _levelApi.fetchLevels();
+    final starsFuture = _progressApi
+        .fetchStarsByLevel()
+        .catchError((Object _) => <String, int>{});
+    return _LevelsData(await levelsFuture, await starsFuture);
   }
 
   void _reload() {
