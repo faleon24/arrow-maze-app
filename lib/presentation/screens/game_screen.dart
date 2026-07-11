@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-
 import '../../data/models/level_model.dart';
 import '../../domain/models/cell.dart';
 import '../../domain/models/game_session.dart';
@@ -42,18 +42,24 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
   final ProgressApi _progressApi = ProgressApi();
-
   // The position briefly flashed red after a blocked tap.
   Position? _blockedFlash;
-
+  // Cancelable so a fast second tap does not race the first tap's clear
+  // callback, and so a widget dispose does not leave a pending setState.
+  Timer? _flashTimer;
   // A message if saving the score failed (offline, token expired, etc.).
   String? _saveError;
-
   @override
   void initState() {
     super.initState();
     _startSession();
   }
+  @override
+  void dispose() {
+    _flashTimer?.cancel();
+    super.dispose();
+  }
+
 
   void _startSession() {
     final arrowCount = widget.level.board.arrows.length;
@@ -79,8 +85,9 @@ class _GameScreenState extends State<GameScreen> {
       }
     });
 
-    if (outcome == TapOutcome.blocked) {
-      Future.delayed(const Duration(milliseconds: 350), () {
+   if (outcome == TapOutcome.blocked) {
+      _flashTimer?.cancel();
+      _flashTimer = Timer(const Duration(milliseconds: 350), () {
         if (mounted) setState(() => _blockedFlash = null);
       });
     }
