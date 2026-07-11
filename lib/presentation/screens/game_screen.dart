@@ -6,6 +6,7 @@ import '../../domain/models/game_session.dart';
 import '../../domain/models/position.dart';
 import '../../data/api/progress_api.dart';
 import '../../data/api/api_exception.dart';
+import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
 
 /// GameScreen — the playable board for a single level.
@@ -106,12 +107,16 @@ class _GameScreenState extends State<GameScreen> {
         timeMs: 0,
         stars: _session.starsEarned,
       );
+    } on UnauthorizedException catch (_) {
+      // Session died mid-game — force a global sign-out and abort the
+      // dialog: the user is about to land on LoginScreen.
+      if (mounted) await AuthGuard.signOut();
+      return;
     } on ApiException catch (e) {
       _saveError = e.message;
     } catch (e) {
       _saveError = e.toString();
     }
-
     if (mounted) _showEndDialog(won: true);
   }
 

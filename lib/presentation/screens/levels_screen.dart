@@ -68,7 +68,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
             onPressed: () async {
-              await AuthStorage().clearToken();
+              await AuthStorage().clearSession();
               if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),

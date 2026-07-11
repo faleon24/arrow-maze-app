@@ -44,7 +44,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text,
         displayName: _nameController.text.trim(),
       );
-      await _storage.saveToken(auth.token);
+      await _storage.saveSession(token: auth.token, expiresAt: auth.expiresAt);
 
       if (!mounted) return;
       // Clear the whole navigation stack and land on the levels screen.

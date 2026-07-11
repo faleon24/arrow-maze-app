@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      await _storage.saveToken(auth.token);
+      await _storage.saveSession(token: auth.token, expiresAt: auth.expiresAt);
 
       if (!mounted) return;
       // Replace login with the levels screen so "back" doesn't return here.
