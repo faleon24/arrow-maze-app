@@ -1,61 +1,69 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
-import '../models/auth_response.dart';
-
-/// AuthApi — the data-layer client for the backend's /auth endpoints.
-///
-/// Register and login both return an AuthResponse (token + expiry). On a
-/// non-2xx status it throws with the server's message so the UI can show
-/// why (e.g. "email already registered", "invalid credentials").
-class AuthApi {
-  static const String _baseUrl = 'http://localhost:3000/api';
-
-  Future<AuthResponse> register({
-    required String email,
-    required String password,
-    required String displayName,
+import '../auth_storage.dart';
+import 'api_config.dart';
+/// ProgressApi — the data-layer client for the protected /me/progress
+/// endpoints. Unlike LevelApi (public), every call here must carry the
+/// bearer token, which it reads from AuthStorage and puts in the
+/// Authorization header.
+class ProgressApi {
+  final AuthStorage _storage = AuthStorage();
+  /// Submit a completed run. Returns nothing useful to the caller
+  /// beyond success; the backend keeps the best score. Throws on
+  /// failure (including 401 if the token is missing or expired).
+  Future<void> submitScore({
+    required String levelId,
+    required int moves,
+    required int timeMs,
+    required int stars,
   }) async {
-    return _post('/auth/register', {
-      'email': email,
-      'password': password,
-      'displayName': displayName,
-    });
-  }
-
-  Future<AuthResponse> login({
-    required String email,
-    required String password,
-  }) async {
-    return _post('/auth/login', {
-      'email': email,
-      'password': password,
-    });
-  }
-
-  Future<AuthResponse> _post(String path, Map<String, dynamic> body) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl$path'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return AuthResponse.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
-      );
+    final token = await _storage.readToken();
+    if (token == null) {
+      throw Exception('Not signed in');
     }
-
-    // Surface the backend's error message when possible.
-    String message = 'Request failed (HTTP ${response.statusCode})';
-    try {
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      if (decoded['message'] != null) {
-        message = decoded['message'].toString();
-      }
-    } catch (_) {
-      // Body wasn't JSON; keep the generic message.
+    final response = await http
+        .post(
+          Uri.parse('${ApiConfig.baseUrl}/me/progress'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'levelId': levelId,
+            'moves': moves,
+            'timeMs': timeMs,
+            'stars': stars,
+          }),
+        )
+        .timeout(ApiConfig.requestTimeout);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to submit score (HTTP ${response.statusCode})');
     }
-    throw Exception(message);
+  }
+  /// Fetch the player's progress as a map of levelId -> stars, so the
+  /// levels list can show how many stars each level was cleared with.
+  /// Returns an empty map if the user has no progress yet.
+  Future<Map<String, int>> fetchStarsByLevel() async {
+    final token = await _storage.readToken();
+    if (token == null) {
+      throw Exception('Not signed in');
+    }
+    final response = await http
+        .get(
+          Uri.parse('${ApiConfig.baseUrl}/me/progress'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(ApiConfig.requestTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load progress (HTTP ${response.statusCode})');
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final entries = decoded['entries'] as List<dynamic>;
+    final result = <String, int>{};
+    for (final entry in entries) {
+      final map = entry as Map<String, dynamic>;
+      result[map['levelId'] as String] = map['stars'] as int;
+    }
+    return result;
   }
 }
