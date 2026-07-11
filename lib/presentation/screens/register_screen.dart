@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-
 import '../../data/api/auth_api.dart';
+import '../../data/api/api_exception.dart';
 import '../../data/auth_storage.dart';
 import 'levels_screen.dart';
 
@@ -52,8 +52,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         MaterialPageRoute(builder: (_) => const LevelsScreen()),
         (route) => false,
       );
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }

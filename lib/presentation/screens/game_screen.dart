@@ -5,6 +5,7 @@ import '../../domain/models/cell.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/position.dart';
 import '../../data/api/progress_api.dart';
+import '../../data/api/api_exception.dart';
 import '../widgets/cell_widget.dart';
 
 /// GameScreen — the playable board for a single level.
@@ -105,8 +106,10 @@ class _GameScreenState extends State<GameScreen> {
         timeMs: 0,
         stars: _session.starsEarned,
       );
+    } on ApiException catch (e) {
+      _saveError = e.message;
     } catch (e) {
-      _saveError = e.toString().replaceFirst('Exception: ', '');
+      _saveError = e.toString();
     }
 
     if (mounted) _showEndDialog(won: true);

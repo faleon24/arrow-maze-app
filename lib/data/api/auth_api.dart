@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/auth_response.dart';
 import 'api_config.dart';
+import 'api_exception.dart';
 /// AuthApi — the data-layer client for the backend's /auth endpoints.
 ///
-/// Register and login both return an AuthResponse (token + expiry). On
-/// a non-2xx status it throws with the server's message so the UI can
-/// show why (e.g. "email already registered", "invalid credentials").
+/// On a non-2xx status it throws an ApiException carrying the backend's
+/// message field, so the UI can display it directly. Manual message
+/// extraction and the "Exception: " string-slicing that used to live
+/// here now sit inside ApiException.fromResponse.
 class AuthApi {
   Future<AuthResponse> register({
     required String email,
@@ -41,16 +43,6 @@ class AuthApi {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    // Surface the backend's error message when possible.
-    String message = 'Request failed (HTTP ${response.statusCode})';
-    try {
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      if (decoded['message'] != null) {
-        message = decoded['message'].toString();
-      }
-    } catch (_) {
-      // Body wasn't JSON; keep the generic message.
-    }
-    throw Exception(message);
+    throw ApiException.fromResponse(response);
   }
 }
