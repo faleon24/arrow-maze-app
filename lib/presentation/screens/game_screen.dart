@@ -1,24 +1,18 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import '../../data/api/api_exception.dart';
+import '../../data/api/progress_api.dart';
 import '../../data/models/level_model.dart';
-import '../../domain/models/cell.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/position.dart';
-import '../../data/api/progress_api.dart';
-import '../../data/api/api_exception.dart';
 import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
 
-/// GameScreen — the playable board for a single level.
-///
-/// Wraps the level's board in a GameSession (the tested domain rules) and
-/// turns taps into moves. On a win it submits the run to the backend and
-/// shows the result; on a loss it offers a retry.
+
 class GameScreen extends StatefulWidget {
   final LevelModel level;
-
-  // The full catalog and this level's position in it, so the game can
-  // offer "next level" on a win. Optional: if not provided, no next.
   final List<LevelModel>? catalog;
   final int? indexInCatalog;
 
@@ -42,13 +36,11 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
   final ProgressApi _progressApi = ProgressApi();
-  // The position briefly flashed red after a blocked tap.
+
   Position? _blockedFlash;
-  // Cancelable so a fast second tap does not race the first tap's clear
-  // callback, and so a widget dispose does not leave a pending setState.
   Timer? _flashTimer;
-  // A message if saving the score failed (offline, token expired, etc.).
   String? _saveError;
+
   @override
   void initState() {
     super.initState();
@@ -77,25 +69,16 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onCellTapped(Position position) {
     if (_session.isCleared || _session.isFailed) return;
-
     final outcome = _session.tap(position);
-
     setState(() {
-      if (outcome == TapOutcome.blocked) {
-        _blockedFlash = position;
-      } else {
-        _blockedFlash = null;
-      }
+      _blockedFlash = outcome == TapOutcome.blocked ? position : null;
     });
-
     if (outcome == TapOutcome.blocked) {
       _flashTimer?.cancel();
       _flashTimer = Timer(const Duration(milliseconds: 350), () {
         if (mounted) setState(() => _blockedFlash = null);
       });
     }
-
-    // Check for end of game after the move.
     if (_session.isCleared) {
       _submitAndShowWin();
     } else if (_session.isFailed) {
@@ -103,23 +86,16 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  /// On a win, submit the run to the backend (best score is kept there),
-  /// then show the win dialog. A failed save doesn't block the dialog —
-  /// the player still cleared the level; we just note it couldn't sync.
   Future<void> _submitAndShowWin() async {
     _saveError = null;
-
     try {
       await _progressApi.submitScore(
         levelId: widget.level.id,
         moves: _session.movesUsed,
-        // No timer in this game; send 0 as an informational placeholder.
         timeMs: 0,
         stars: _session.starsEarned,
       );
     } on UnauthorizedException catch (_) {
-      // Session died mid-game — force a global sign-out and abort the
-      // dialog: the user is about to land on LoginScreen.
       if (mounted) await AuthGuard.signOut();
       return;
     } on ApiException catch (e) {
@@ -135,9 +111,6 @@ class _GameScreenState extends State<GameScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => PopScope(
-        // Deny system back / swipe-back while the dialog is up. Without
-        // this, Android would pop the dialog and leave the player on a
-        // frozen game screen with no way forward.
         canPop: false,
         child: AlertDialog(
           title: Text(won ? 'Level cleared! 🎉' : 'Out of moves'),
@@ -163,12 +136,11 @@ class _GameScreenState extends State<GameScreen> {
               },
               child: const Text('Play again'),
             ),
-            // Only on a win, and only if there is a next level.
             if (won && widget.nextLevel != null)
               FilledButton(
                 onPressed: () {
                   final next = widget.nextLevel!;
-                  Navigator.of(context).pop(); // close dialog
+                  Navigator.of(context).pop();
                   Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
                       builder: (_) => GameScreen(
@@ -190,7 +162,6 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     final board = _session.board;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -217,14 +188,17 @@ class _GameScreenState extends State<GameScreen> {
                       final row = i ~/ board.cols;
                       final col = i % board.cols;
                       final position = Position(row, col);
-                      final cell = board.cellAt(position);
-
+                      final arrow = board.arrowAt(position);
                       return GestureDetector(
-                        onTap: cell is ArrowCell
+                        onTap: arrow != null
                             ? () => _onCellTapped(position)
                             : null,
                         child: CellWidget(
-                          cell: cell,
+                          arrow: arrow,
+                          isWall: board.isWall(position),
+                          collectible: board.collectibleAt(position),
+                          isArrowHead:
+                              arrow != null && arrow.head == position,
                           highlight: _blockedFlash == position
                               ? Colors.red.shade400
                               : null,
@@ -242,10 +216,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 }
 
-/// A small header showing moves used and lives remaining.
 class _StatusBar extends StatelessWidget {
   final GameSession session;
-
   const _StatusBar({required this.session});
 
   @override
@@ -264,9 +236,7 @@ class _StatusBar extends StatelessWidget {
             value: '${session.movesUsed} / ${session.moveLimit}',
           ),
         ),
-        Expanded(
-          child: _Stat(label: 'Lives', value: '${session.lives}'),
-        ),
+        Expanded(child: _Stat(label: 'Lives', value: '${session.lives}')),
       ],
     );
   }
@@ -275,7 +245,6 @@ class _StatusBar extends StatelessWidget {
 class _Stat extends StatelessWidget {
   final String label;
   final String value;
-
   const _Stat({required this.label, required this.value});
 
   @override

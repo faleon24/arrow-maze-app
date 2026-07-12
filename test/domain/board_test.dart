@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arrow_maze_app/domain/models/arrow_color.dart';
 import 'package:arrow_maze_app/domain/models/arrow_path.dart';
-import 'package:arrow_maze_app/domain/models/board_v2.dart';
+import 'package:arrow_maze_app/domain/models/board.dart';
 import 'package:arrow_maze_app/domain/models/collectible.dart';
 import 'package:arrow_maze_app/domain/models/direction.dart';
 import 'package:arrow_maze_app/domain/models/position.dart';

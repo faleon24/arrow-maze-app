@@ -1,17 +1,36 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/models/cell.dart';
+import '../../domain/models/arrow_path.dart';
+import '../../domain/models/collectible.dart';
 
-/// CellWidget — draws a single board cell.
+/// CellWidget — draws a single board tile in v2.
 ///
-/// Arrows are shown as colored tiles with a direction glyph; empty space
-/// is a plain light tile. An optional [highlight] tints the tile to give
-/// feedback (e.g. red when the player taps a blocked arrow).
+/// The tile inspects up to four things at its position:
+/// - [arrow] the ArrowPath occupying it (null if none)
+/// - [isArrowHead] whether this tile is the arrow's leading cell (only
+///   the head shows the direction glyph)
+/// - [isWall] whether the tile is impassable
+/// - [collectible] a pickup (STAR for now) sitting on an otherwise-empty
+///   tile
+///
+/// [highlight] optionally tints the tile — used to flash red on a
+/// blocked tap. Container-based rendering is the placeholder; Fase 5.3
+/// swaps it for a CustomPainter neon look.
 class CellWidget extends StatelessWidget {
-  final Cell cell;
+  final ArrowPath? arrow;
+  final bool isWall;
+  final Collectible? collectible;
+  final bool isArrowHead;
   final Color? highlight;
 
-  const CellWidget({super.key, required this.cell, this.highlight});
+  const CellWidget({
+    super.key,
+    this.arrow,
+    this.isWall = false,
+    this.collectible,
+    this.isArrowHead = false,
+    this.highlight,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -34,13 +53,15 @@ class CellWidget extends StatelessWidget {
   }
 
   Color _backgroundColor() {
-    if (cell is ArrowCell) return Colors.deepPurple.shade400;
-    return Colors.grey.shade200; // empty space
+    if (isWall) return Colors.grey.shade800;
+    if (arrow != null) return arrow!.color.hex;
+    return Colors.grey.shade200;
   }
 
   String _glyph() {
-    final c = cell;
-    if (c is ArrowCell) return c.direction.symbol;
+    if (isWall) return '';
+    if (isArrowHead) return arrow!.direction.symbol;
+    if (collectible?.kind == 'STAR') return '★';
     return '';
   }
 }
