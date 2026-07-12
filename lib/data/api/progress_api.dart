@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+
 import '../auth_storage.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
@@ -10,11 +11,16 @@ import 'api_exception.dart';
 /// is thrown so the caller (later, a global handler) can force logout.
 class ProgressApi {
   final AuthStorage _storage = AuthStorage();
+
+  /// Submit a run for a level. The backend computes stars server-side
+  /// from [timeMs] and the level's timeLimitMs (Fase 3 server-
+  /// authoritative scoring), so this payload never carries a client-
+  /// supplied stars value — the whitelist ValidationPipe at the seam
+  /// rejects it as an extra property.
   Future<void> submitScore({
     required String levelId,
     required int moves,
     required int timeMs,
-    required int stars,
   }) async {
     final token = await _storage.readToken();
     if (token == null) {
@@ -31,7 +37,6 @@ class ProgressApi {
             'levelId': levelId,
             'moves': moves,
             'timeMs': timeMs,
-            'stars': stars,
           }),
         )
         .timeout(ApiConfig.requestTimeout);
