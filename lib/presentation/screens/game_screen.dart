@@ -163,11 +163,14 @@ class _GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     final board = _session.board;
     return Scaffold(
+      backgroundColor: const Color(0xFF07091A),
       appBar: AppBar(
-        title: Text(
-          'Level ${widget.level.index + 1} · ${widget.level.difficulty}',
-        ),
-      ),
+      backgroundColor: const Color(0xFF0F1330),
+      foregroundColor: Colors.white,
+      title: Text(
+      'Level ${widget.level.index + 1} · ${widget.level.difficulty}',
+    ),
+  ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -251,8 +254,20 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value, style: Theme.of(context).textTheme.headlineSmall),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          value,
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall
+              ?.copyWith(color: Colors.white),
+        ),
+        Text(
+          label,
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Colors.white70),
+        ),
       ],
     );
   }
