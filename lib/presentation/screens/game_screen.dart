@@ -93,7 +93,6 @@ class _GameScreenState extends State<GameScreen> {
         levelId: widget.level.id,
         moves: _session.movesUsed,
         timeMs: 0,
-        stars: _session.starsEarned,
       );
     } on UnauthorizedException catch (_) {
       if (mounted) await AuthGuard.signOut();
