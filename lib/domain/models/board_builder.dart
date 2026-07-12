@@ -1,7 +1,7 @@
 import 'arrow_color.dart';
 import 'arrow_path.dart';
 import 'board_v2.dart';
-import 'cell_factory.dart' show DirectionFactory;
+import 'direction.dart';
 import 'collectible.dart';
 import 'position.dart';
 

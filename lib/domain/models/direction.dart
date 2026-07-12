@@ -52,3 +52,20 @@ class RightDirection extends Direction {
   @override
   String get label => 'RIGHT';
 }
+
+class DirectionFactory {
+  static Direction fromLabel(String label) {
+    switch (label.toUpperCase()) {
+      case 'UP':
+        return UpDirection();
+      case 'DOWN':
+        return DownDirection();
+      case 'LEFT':
+        return LeftDirection();
+      case 'RIGHT':
+        return RightDirection();
+      default:
+        throw FormatException('Unknown direction: "$label"');
+    }
+  }
+}
