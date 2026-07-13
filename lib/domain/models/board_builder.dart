@@ -150,12 +150,14 @@ class BoardBuilder {
 
   void _validateArrowContiguous(ArrowPath arrow) {
     for (var i = 0; i < arrow.cells.length - 1; i++) {
-      final expected = arrow.direction.apply(arrow.cells[i]);
-      if (arrow.cells[i + 1] != expected) {
+      final prev = arrow.cells[i];
+      final curr = arrow.cells[i + 1];
+      final dr = (curr.row - prev.row).abs();
+      final dc = (curr.col - prev.col).abs();
+      if (dr + dc != 1) {
         throw FormatException(
-          'Arrow "${arrow.id}" cells are not contiguous in '
-          '${arrow.direction.label} direction at index $i: '
-          '${arrow.cells[i + 1]} != $expected',
+          'Arrow "${arrow.id}" cells must be orthogonally contiguous '
+          '(Manhattan-1); $prev to $curr is not adjacent',
         );
       }
     }

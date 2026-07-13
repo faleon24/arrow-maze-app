@@ -46,26 +46,11 @@ void main() {
   });
 
   group('BoardBuilder.addArrow invariants', () {
-    test('should_reject_arrow_when_cells_are_not_contiguous_in_direction', () {
+    test('should_reject_arrow_when_cells_have_a_gap', () {
       final gap = _rightPath('a1', [Position(0, 0), Position(0, 2)]);
 
       expect(
         () => BoardBuilder().withDimensions(3, 3).addArrow(gap),
-        throwsA(isA<FormatException>()),
-      );
-    });
-
-    test('should_reject_arrow_when_cells_dont_align_with_direction', () {
-      // direction RIGHT but cells step DOWN.
-      final wrongAxis = ArrowPath(
-        id: 'a1',
-        color: GreenColor(),
-        cells: [Position(0, 0), Position(1, 0)],
-        direction: RightDirection(),
-      );
-
-      expect(
-        () => BoardBuilder().withDimensions(3, 3).addArrow(wrongAxis),
         throwsA(isA<FormatException>()),
       );
     });
@@ -100,6 +85,63 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    group('BoardBuilder.addArrow accepts bent paths', () {
+    test('should_accept_arrow_when_cells_form_an_l_shape', () {
+      final l = ArrowPath(
+        id: 'L1',
+        color: GreenColor(),
+        cells: [
+          Position(2, 0),
+          Position(2, 1),
+          Position(2, 2),
+          Position(1, 2),
+        ],
+        direction: UpDirection(),
+      );
+      final board = BoardBuilder().withDimensions(5, 5).addArrow(l).build();
+      expect(board.arrows.single.cells.length, 4);
+      expect(board.arrows.single.head, Position(1, 2));
+    });
+    test('should_accept_arrow_when_cells_form_a_u_shape', () {
+      final u = ArrowPath(
+        id: 'U1',
+        color: BlueColor(),
+        cells: [
+          Position(0, 0),
+          Position(1, 0),
+          Position(2, 0),
+          Position(2, 1),
+          Position(2, 2),
+          Position(1, 2),
+          Position(0, 2),
+        ],
+        direction: UpDirection(),
+      );
+      final board = BoardBuilder().withDimensions(5, 5).addArrow(u).build();
+      expect(board.arrows.single.cells.length, 7);
+      expect(board.arrows.single.head, Position(0, 2));
+    });
+    test('should_accept_arrow_when_cells_form_an_s_shape', () {
+      final s = ArrowPath(
+        id: 'S1',
+        color: PurpleColor(),
+        cells: [
+          Position(0, 0),
+          Position(0, 1),
+          Position(1, 1),
+          Position(1, 2),
+          Position(2, 2),
+        ],
+        direction: DownDirection(),
+      );
+      final board = BoardBuilder().withDimensions(5, 5).addArrow(s).build();
+      expect(board.arrows.single.cells.length, 5);
+      expect(board.arrows.single.head, Position(2, 2));
+    });
+  });
+
+
   });
 
   group('BoardBuilder.addWall / addCollectible invariants', () {
