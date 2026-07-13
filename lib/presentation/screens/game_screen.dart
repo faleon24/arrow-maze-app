@@ -1,5 +1,6 @@
 import 'dart:async';
 
+
 import 'package:flutter/material.dart';
 
 import '../../data/api/api_exception.dart';
@@ -9,6 +10,7 @@ import '../../domain/models/game_session.dart';
 import '../../domain/models/position.dart';
 import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
+import '../widgets/board_painter.dart';
 
 
 class GameScreen extends StatefulWidget {
@@ -180,33 +182,42 @@ class _GameScreenState extends State<GameScreen> {
               child: Center(
                 child: AspectRatio(
                   aspectRatio: board.cols / board.rows,
-                  child: GridView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: board.cols,
-                    ),
-                    itemCount: board.rows * board.cols,
-                    itemBuilder: (context, i) {
-                      final row = i ~/ board.cols;
-                      final col = i % board.cols;
-                      final position = Position(row, col);
-                      final arrow = board.arrowAt(position);
-                      return GestureDetector(
-                        onTap: arrow != null
-                            ? () => _onCellTapped(position)
-                            : null,
-                        child: CellWidget(
-                          arrow: arrow,
-                          isWall: board.isWall(position),
-                          collectible: board.collectibleAt(position),
-                          isArrowHead:
-                              arrow != null && arrow.head == position,
-                          highlight: _blockedFlash == position
-                              ? Colors.red.shade400
-                              : null,
+                  child: Stack(
+                    children: [
+                      GridView.builder(
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: board.cols,
                         ),
-                      );
-                    },
+                        itemCount: board.rows * board.cols,
+                        itemBuilder: (context, i) {
+                          final row = i ~/ board.cols;
+                          final col = i % board.cols;
+                          final position = Position(row, col);
+                          final arrow = board.arrowAt(position);
+                          return GestureDetector(
+                            onTap: arrow != null
+                                ? () => _onCellTapped(position)
+                                : null,
+                            child: CellWidget(
+                              isWall: board.isWall(position),
+                              collectible: board.collectibleAt(position),
+                              highlight: _blockedFlash == position
+                                  ? Colors.red.shade400
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(
+                            painter: BoardPainter(board: board),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
