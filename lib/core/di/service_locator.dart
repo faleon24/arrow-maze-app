@@ -9,6 +9,9 @@ import '../../application/usecases/game/reveal_hint_usecase.dart';
 import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/level/get_levels_usecase.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
+import '../../application/usecases/lives/consume_life_usecase.dart';
+import '../../application/usecases/lives/get_lives_usecase.dart';
+import '../../application/usecases/lives/purchase_life_usecase.dart';
 import '../../application/usecases/progress/get_stars_by_level_usecase.dart';
 import '../../application/usecases/progress/submit_level_result_usecase.dart';
 import '../../application/usecases/wallet/award_coins_for_level_usecase.dart';
@@ -19,6 +22,7 @@ import '../../domain/ports/auth_token_storage.dart';
 import '../../domain/ports/haptics_service.dart';
 import '../../domain/ports/inventory_service.dart';
 import '../../domain/ports/level_repository.dart';
+import '../../domain/ports/lives_service.dart';
 import '../../domain/ports/progress_repository.dart';
 import '../../domain/ports/wallet_service.dart';
 import '../../domain/services/arrow_ray_calculator.dart';
@@ -27,6 +31,7 @@ import '../../infrastructure/adapters/http/level_http_adapter.dart';
 import '../../infrastructure/adapters/http/progress_http_adapter.dart';
 import '../../infrastructure/adapters/local/dev_level_adapter.dart';
 import '../../infrastructure/adapters/local/shared_prefs_inventory_adapter.dart';
+import '../../infrastructure/adapters/local/shared_prefs_lives_adapter.dart';
 import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import '../../infrastructure/adapters/local/shared_prefs_wallet_adapter.dart';
 import '../../infrastructure/adapters/platform/flutter_haptics_adapter.dart';
@@ -67,6 +72,9 @@ Future<void> setupDI() async {
   );
   getIt.registerLazySingleton<IInventoryService>(
     () => const SharedPrefsInventoryAdapter(),
+  );
+  getIt.registerLazySingleton<ILivesService>(
+    () => const SharedPrefsLivesAdapter(),
   );
 
   // === Domain services ===
@@ -134,5 +142,19 @@ Future<void> setupDI() async {
   );
   getIt.registerFactory(
     () => AwardCoinsForLevelUseCase(getIt<IWalletService>()),
+  );
+
+  // === Application use cases: lives ===
+  getIt.registerFactory(
+    () => GetLivesUseCase(getIt<ILivesService>()),
+  );
+  getIt.registerFactory(
+    () => ConsumeLifeUseCase(getIt<ILivesService>()),
+  );
+  getIt.registerFactory(
+    () => PurchaseLifeUseCase(
+      getIt<IWalletService>(),
+      getIt<ILivesService>(),
+    ),
   );
 }
