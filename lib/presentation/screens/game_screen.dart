@@ -7,6 +7,7 @@ import '../../application/usecases/game/reveal_hint_usecase.dart';
 import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/lives/consume_life_usecase.dart';
 import '../../application/usecases/lives/get_lives_usecase.dart';
+import '../../application/usecases/progress/get_stars_by_level_usecase.dart';
 import '../../application/usecases/progress/submit_level_result_usecase.dart';
 import '../../application/usecases/wallet/award_coins_for_level_usecase.dart';
 import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
@@ -48,6 +49,8 @@ class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
   final SubmitLevelResultUseCase _submitResult =
       getIt<SubmitLevelResultUseCase>();
+  final GetStarsByLevelUseCase _getStarsByLevel =
+      getIt<GetStarsByLevelUseCase>();
   final GameFeedbackUseCase _feedback = getIt<GameFeedbackUseCase>();
   final RevealHintUseCase _revealHint = getIt<RevealHintUseCase>();
   final UseGridHighlightUseCase _useGrid = getIt<UseGridHighlightUseCase>();
@@ -70,10 +73,16 @@ class _GameScreenState extends State<GameScreen> {
   int _hintCount = 0;
   int _gridCount = 0;
   int _coinsEarnedThisRun = 0;
+  int? _serverStars;
   LivesState? _globalLives;
   bool _gridMode = false;
   Position? _hintedHead;
   List<Position> _gridRay = const <Position>[];
+
+  /// Wall-clock start of the current attempt. Elapsed ms is submitted
+  /// so the server's DifficultyProfile.starsFor(timeMs) receives a
+  /// real duration and doesn't grade every run as three stars.
+  DateTime? _sessionStartTime;
 
   /// Guard so we never consume more than one global life per instance
   /// of this screen (fail path AND dispose path both check it).
@@ -88,11 +97,8 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
-    // If the player leaves without clearing the level and we did not
-    // already spend a life for a failure, that leave itself costs one.
     if (!_session.isCleared && !_lifeConsumedThisRun) {
       _lifeConsumedThisRun = true;
-      // Fire-and-forget: the widget is being torn down; nothing awaits.
       _consumeLife();
     }
     _flashTimer?.cancel();
@@ -128,11 +134,18 @@ class _GameScreenState extends State<GameScreen> {
     _gridRay = const <Position>[];
     _gridMode = false;
     _coinsEarnedThisRun = 0;
+    _serverStars = null;
     _lifeConsumedThisRun = false;
+    _sessionStartTime = DateTime.now();
     _zoomController.value = Matrix4.identity();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _session.isCleared) _submitAndShowWin();
     });
+  }
+
+  int _elapsedMs() {
+    if (_sessionStartTime == null) return 0;
+    return DateTime.now().difference(_sessionStartTime!).inMilliseconds;
   }
 
   void _resetZoom() {
@@ -239,7 +252,6 @@ class _GameScreenState extends State<GameScreen> {
   void _handleFailure() {
     if (_lifeConsumedThisRun) return;
     _lifeConsumedThisRun = true;
-    // Fire-and-forget; UI does not depend on the update completing.
     unawaited(() async {
       await _consumeLife();
       if (!mounted) return;
@@ -251,12 +263,18 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _submitAndShowWin() async {
     _saveError = null;
+    int? serverStars;
+    final elapsedMs = _elapsedMs();
     try {
       await _submitResult(
         levelId: widget.level.id,
         moves: _session.movesUsed,
-        timeMs: 0,
+        timeMs: elapsedMs,
       );
+      // Server is authoritative for stars — refetch so both this
+      // dialog and the coin award reflect what actually got recorded.
+      final starsByLevel = await _getStarsByLevel();
+      serverStars = starsByLevel[widget.level.id];
     } on UnauthorizedException catch (_) {
       if (mounted) await AuthGuard.signOut();
       return;
@@ -266,11 +284,13 @@ class _GameScreenState extends State<GameScreen> {
       _saveError = e.toString();
     }
 
-    final earned = await _awardCoins(stars: _session.starsEarned);
+    final displayStars = serverStars ?? _session.starsEarned;
+    final earned = await _awardCoins(stars: displayStars);
     if (mounted) {
       setState(() {
         _coinsEarnedThisRun = earned;
         _coinsBalance += earned;
+        _serverStars = serverStars;
       });
     }
     if (mounted) _showEndDialog(won: true);
@@ -298,6 +318,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _showEndDialog({required bool won}) {
+    final stars = _serverStars ?? _session.starsEarned;
+    final timeSec = (_elapsedMs() / 1000).toStringAsFixed(1);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -307,8 +329,8 @@ class _GameScreenState extends State<GameScreen> {
           title: Text(won ? 'Level cleared!' : 'Out of moves'),
           content: Text(
             won
-                ? 'You cleared the board in ${_session.movesUsed} moves.\n'
-                      'Stars earned: ${'*' * _session.starsEarned}\n'
+                ? 'You cleared the board in ${_session.movesUsed} moves ($timeSec s).\n'
+                      'Stars earned: ${'*' * stars}\n'
                       'Coins earned: +$_coinsEarnedThisRun (total: $_coinsBalance)\n'
                       '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
                 : 'The board still has ${_session.arrowsRemaining} arrows.\n'
