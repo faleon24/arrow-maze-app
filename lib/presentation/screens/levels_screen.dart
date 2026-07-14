@@ -11,6 +11,7 @@ import '../../domain/models/level.dart';
 import '../../domain/models/lives_state.dart';
 import 'game_screen.dart';
 import 'login_screen.dart';
+import 'shop_screen.dart';
 
 class LevelsScreen extends StatefulWidget {
   const LevelsScreen({super.key});
@@ -94,6 +95,14 @@ class _LevelsScreenState extends State<LevelsScreen> {
       ),
     );
     _reload();
+  }
+
+  Future<void> _openShop(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ShopScreen()),
+    );
+    // Coins / lives may have changed via purchases; refresh header.
+    await _refreshHeader();
   }
 
   void _openGenerateSheet() {
@@ -189,6 +198,11 @@ class _LevelsScreenState extends State<LevelsScreen> {
             icon: Icons.monetization_on,
             iconColor: Colors.amber,
             text: '$_coins',
+          ),
+          IconButton(
+            icon: const Icon(Icons.shopping_bag_outlined),
+            tooltip: 'Shop',
+            onPressed: () => _openShop(context),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
