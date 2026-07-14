@@ -1,44 +1,48 @@
+import '../../../domain/models/game_observer.dart';
 import '../../../domain/ports/audio_service.dart';
 import '../../../domain/ports/haptics_service.dart';
 
-/// GameFeedbackUseCase — coordinates haptic and audio feedback for
-/// gameplay events. Screens call the appropriate method after
-/// mutating the GameSession; the use case fires both ports in
-/// parallel so neither blocks the other, and neither blocks the UI.
+/// GameFeedbackUseCase — Observer over GameSession events (Observer
+/// pattern, GoF). Composes the audio and haptics ports.
 ///
-/// This is the first application use case that composes two service
-/// ports rather than a repository — a natural fit for the pattern
-/// because there is genuine coordination logic ("fire tactile + sound
-/// together") that would otherwise be duplicated in every screen
-/// that reacts to gameplay events.
-class GameFeedbackUseCase {
+/// GameSession fires onArrowActivated / onArrowBlocked / onLevelCleared
+/// / onLevelFailed as tap outcomes resolve; this class subscribes via
+/// GameSession.addObserver and fans out each event to both feedback
+/// channels in parallel. Screens no longer need to call the feedback
+/// methods directly — registering the observer once at session start
+/// is enough.
+class GameFeedbackUseCase extends GameObserver {
   final IHapticsService _haptics;
   final IAudioService _audio;
 
-  const GameFeedbackUseCase(this._haptics, this._audio);
+  GameFeedbackUseCase(this._haptics, this._audio);
 
-  Future<void> arrowActivated() async {
+  @override
+  Future<void> onArrowActivated() async {
     await Future.wait([
       _haptics.lightTap(),
       _audio.playArrowActivated(),
     ]);
   }
 
-  Future<void> arrowBlocked() async {
+  @override
+  Future<void> onArrowBlocked() async {
     await Future.wait([
       _haptics.heavyTap(),
       _audio.playArrowBlocked(),
     ]);
   }
 
-  Future<void> levelCleared() async {
+  @override
+  Future<void> onLevelCleared() async {
     await Future.wait([
       _haptics.success(),
       _audio.playLevelCleared(),
     ]);
   }
 
-  Future<void> levelFailed() async {
+  @override
+  Future<void> onLevelFailed() async {
     await Future.wait([
       _haptics.heavyTap(),
       _audio.playArrowBlocked(),

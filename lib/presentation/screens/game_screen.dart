@@ -153,6 +153,7 @@ class _GameScreenState extends State<GameScreen> {
       moveLimit: arrowCount * 3,
       maxLives: 3,
     );
+    _session.addObserver(_feedback);
     _blockedFlash = null;
     _saveError = null;
     _hintedHead = null;
@@ -192,9 +193,11 @@ class _GameScreenState extends State<GameScreen> {
       _sessionStartTime = _sessionStartTime!.add(pausedFor);
       setState(() => _pausedAt = null);
       _music.resume();
+      _session.resume();
     } else {
       setState(() => _pausedAt = DateTime.now());
       _music.pause();
+      _session.pause();
     }
   }
 
@@ -275,12 +278,6 @@ class _GameScreenState extends State<GameScreen> {
 
     final outcome = _session.tap(position);
 
-    if (outcome == TapOutcome.blocked) {
-      unawaited(_feedback.arrowBlocked());
-    } else {
-      unawaited(_feedback.arrowActivated());
-    }
-
     setState(() {
       _blockedFlash = outcome == TapOutcome.blocked ? position : null;
       _hintedHead = null;
@@ -293,10 +290,8 @@ class _GameScreenState extends State<GameScreen> {
       });
     }
     if (_session.isCleared) {
-      unawaited(_feedback.levelCleared());
       _submitAndShowWin();
     } else if (_session.isFailed) {
-      unawaited(_feedback.levelFailed());
       _handleFailure();
       _showEndDialog(won: false);
     }
