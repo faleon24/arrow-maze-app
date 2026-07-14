@@ -57,8 +57,7 @@
     "difficulty": "HARD",
     "parTimeMs": 60000,
     "timeLimitMs": 180000,
-    "published": true,
-    "board": {
+    "published": true,"board": {
       "version": 2,
       "rows": 6,
       "cols": 6,
@@ -73,13 +72,7 @@
           "id": "a2",
           "color": "YELLOW",
           "direction": "DOWN",
-          "cells": ["0,0", "0,1", "1,1", "1,2"]
-        },
-        {
-          "id": "a3",
-          "color": "GREEN",
-          "direction": "RIGHT",
-          "cells": ["0,4"]
+          "cells": ["0,3", "0,4", "1,4", "1,5"]
         }
       ],
       "walls": [],
