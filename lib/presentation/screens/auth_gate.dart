@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../data/auth_storage.dart';
+import '../../domain/ports/auth_token_storage.dart';
+import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'login_screen.dart';
 import 'levels_screen.dart';
 
@@ -19,7 +20,7 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  final _storage = AuthStorage();
+  final IAuthTokenStorage _storage = const SharedPrefsTokenStorage();
   late Future<bool> _hasValidSessionFuture;
   @override
   void initState() {

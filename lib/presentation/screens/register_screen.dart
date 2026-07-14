@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../data/api/auth_api.dart';
-import '../../data/api/api_exception.dart';
-import '../../data/auth_storage.dart';
+
+import '../../domain/ports/auth_repository.dart';
+import '../../domain/ports/auth_token_storage.dart';
+import '../../infrastructure/adapters/http/api_exception.dart';
+import '../../infrastructure/adapters/http/auth_http_adapter.dart';
+import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'levels_screen.dart';
 
 /// RegisterScreen — create a new account with email, password and a
@@ -18,8 +21,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
-  final _api = AuthApi();
-  final _storage = AuthStorage();
+  final IAuthRepository _api = const AuthHttpAdapter();
+  final IAuthTokenStorage _storage = const SharedPrefsTokenStorage();
 
   bool _loading = false;
   String? _error;
@@ -39,12 +42,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final auth = await _api.register(
+      final session = await _api.register(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         displayName: _nameController.text.trim(),
       );
-      await _storage.saveSession(token: auth.token, expiresAt: auth.expiresAt);
+      await _storage.saveSession(
+        token: session.token,
+        expiresAt: session.expiresAt,
+      );
 
       if (!mounted) return;
       // Clear the whole navigation stack and land on the levels screen.

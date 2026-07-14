@@ -1,21 +1,21 @@
 import 'dart:async';
 
-
 import 'package:flutter/material.dart';
 
-import '../../data/api/api_exception.dart';
-import '../../data/api/progress_api.dart';
-import '../../data/models/level_model.dart';
 import '../../domain/models/game_session.dart';
+import '../../domain/models/level.dart';
 import '../../domain/models/position.dart';
+import '../../domain/ports/progress_repository.dart';
+import '../../infrastructure/adapters/http/api_exception.dart';
+import '../../infrastructure/adapters/http/progress_http_adapter.dart';
+import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
 import '../widgets/board_painter.dart';
 
-
 class GameScreen extends StatefulWidget {
-  final LevelModel level;
-  final List<LevelModel>? catalog;
+  final Level level;
+  final List<Level>? catalog;
   final int? indexInCatalog;
 
   const GameScreen({
@@ -25,7 +25,7 @@ class GameScreen extends StatefulWidget {
     this.indexInCatalog,
   });
 
-  LevelModel? get nextLevel {
+  Level? get nextLevel {
     if (catalog == null || indexInCatalog == null) return null;
     final next = indexInCatalog! + 1;
     return next < catalog!.length ? catalog![next] : null;
@@ -37,7 +37,8 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
-  final ProgressApi _progressApi = ProgressApi();
+  final IProgressRepository _progressRepo =
+      const ProgressHttpAdapter(SharedPrefsTokenStorage());
 
   Position? _blockedFlash;
   Timer? _flashTimer;
@@ -91,7 +92,7 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _submitAndShowWin() async {
     _saveError = null;
     try {
-      await _progressApi.submitScore(
+      await _progressRepo.submitScore(
         levelId: widget.level.id,
         moves: _session.movesUsed,
         timeMs: 0,
@@ -114,11 +115,11 @@ class _GameScreenState extends State<GameScreen> {
       builder: (context) => PopScope(
         canPop: false,
         child: AlertDialog(
-          title: Text(won ? 'Level cleared! 🎉' : 'Out of moves'),
+          title: Text(won ? 'Level cleared!' : 'Out of moves'),
           content: Text(
             won
                 ? 'You cleared the board in ${_session.movesUsed} moves.\n'
-                      'Stars earned: ${'⭐' * _session.starsEarned}\n'
+                      'Stars earned: ${'*' * _session.starsEarned}\n'
                       '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
                 : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
           ),
@@ -166,12 +167,12 @@ class _GameScreenState extends State<GameScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF07091A),
       appBar: AppBar(
-      backgroundColor: const Color(0xFF0F1330),
-      foregroundColor: Colors.white,
-      title: Text(
-      'Level ${widget.level.index + 1} · ${widget.level.difficulty}',
-    ),
-  ),
+        backgroundColor: const Color(0xFF0F1330),
+        foregroundColor: Colors.white,
+        title: Text(
+          'Level ${widget.level.index + 1} - ${widget.level.difficulty}',
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

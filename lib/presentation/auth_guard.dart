@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/auth_storage.dart';
+import '../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'screens/login_screen.dart';
 
 /// AuthGuard — global 401 / UnauthorizedException handler.
@@ -26,7 +26,7 @@ class AuthGuard {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
   static Future<void> signOut() async {
-    await AuthStorage().clearSession();
+    await const SharedPrefsTokenStorage().clearSession();
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,

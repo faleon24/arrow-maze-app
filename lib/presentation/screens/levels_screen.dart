@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../data/api/level_api.dart';
-import '../../data/dev_level_source.dart';
-import '../../data/api/progress_api.dart';
-import '../../data/models/level_model.dart';
-import '../../data/auth_storage.dart';
+import '../../domain/models/level.dart';
+import '../../domain/ports/level_repository.dart';
+import '../../domain/ports/progress_repository.dart';
+import '../../infrastructure/adapters/http/level_http_adapter.dart';
+import '../../infrastructure/adapters/http/progress_http_adapter.dart';
+import '../../infrastructure/adapters/local/dev_level_adapter.dart';
+import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'game_screen.dart';
 import 'login_screen.dart';
 
@@ -23,14 +25,20 @@ class LevelsScreen extends StatefulWidget {
 
 /// Bundles the two things the screen needs, loaded together.
 class _LevelsData {
-  final List<LevelModel> levels;
+  final List<Level> levels;
   final Map<String, int> starsByLevel;
   _LevelsData(this.levels, this.starsByLevel);
 }
 
 class _LevelsScreenState extends State<LevelsScreen> {
-  final LevelApi _levelApi = LevelApi();
-  final ProgressApi _progressApi = ProgressApi();
+  static const bool _useDevLevels =
+      bool.fromEnvironment('USE_DEV_LEVELS', defaultValue: false);
+
+  final ILevelRepository _levelRepo = _useDevLevels
+      ? const DevLevelAdapter()
+      : const LevelHttpAdapter();
+  final IProgressRepository _progressRepo =
+      const ProgressHttpAdapter(SharedPrefsTokenStorage());
 
   late Future<_LevelsData> _dataFuture;
 
@@ -39,12 +47,10 @@ class _LevelsScreenState extends State<LevelsScreen> {
     super.initState();
     _dataFuture = _load();
   }
-      static const bool _useDevLevels =
-      bool.fromEnvironment('USE_DEV_LEVELS', defaultValue: false);
+
   Future<_LevelsData> _load() async {
-    final levelsFuture =
-        _useDevLevels ? DevLevelSource.load() : _levelApi.fetchLevels();
-    final starsFuture = _progressApi.fetchStarsByLevel().catchError(
+    final levelsFuture = _levelRepo.fetchLevels();
+    final starsFuture = _progressRepo.fetchStarsByLevel().catchError(
       (Object _) => <String, int>{},
     );
     return _LevelsData(await levelsFuture, await starsFuture);
@@ -66,7 +72,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
             onPressed: () async {
-              await AuthStorage().clearSession();
+              await const SharedPrefsTokenStorage().clearSession();
               if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -93,8 +99,8 @@ class _LevelsScreenState extends State<LevelsScreen> {
           }
 
           final data = snapshot.data;
-          final levels = data?.levels ?? [];
-          final starsByLevel = data?.starsByLevel ?? {};
+          final levels = data?.levels ?? <Level>[];
+          final starsByLevel = data?.starsByLevel ?? <String, int>{};
 
           if (levels.isEmpty) {
             return const Center(child: Text('No levels published yet.'));
@@ -104,7 +110,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             itemCount: levels.length,
             itemBuilder: (context, i) {
               final level = levels[i];
-              final earned = starsByLevel[level.id]; // null if not cleared
+              final earned = starsByLevel[level.id];
 
               return ListTile(
                 leading: CircleAvatar(child: Text('${level.index + 1}')),
