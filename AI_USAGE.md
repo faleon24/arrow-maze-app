@@ -218,3 +218,147 @@ Together with the backend's parallel fix (`stars = min(movesBased, timeBased)`, 
 - **Server-side refetch is the right way to keep dialog stars in sync with list stars**. Trying to duplicate the server's grading formula on the client would drift the moment either side changed. Refetching after submit costs one round-trip and guarantees the two surfaces show the same number.
 - **A FAB is worth more than a menu entry when the action is the one the player will want most often**. The bottom-sheet difficulty picker is one extra tap, but it makes the difficulty choice explicit — critical when EASY, MEDIUM, and HARD produce visibly different boards. Skipping the picker and defaulting to "surprise me" would have hidden the generator's variety.
 - **Cold restart matters after DI changes**. `flutter clean && flutter pub get && flutter run` reset the isolate and re-ran `setupDI`. Any change to `service_locator.dart` — new binding, changed adapter — requires this dance because `get_it` registrations happen once at start and hot restart doesn't clear the singleton state.
+
+---
+
+## Entry 5 — App: Shop UI (backend catalog + local purchase loop)
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: Backend already exposed `/api/shop` and `/api/me/purchases`, but the app had no UI to browse or spend coins on items. Add a proper shop screen that fetches the catalog from the backend and closes the earn-spend loop visibly for the professor's rubric.
+
+**Prompt (paraphrased)**: Wire the shop as an atomic feature branch: new IShopRepository port with HTTP adapter, ListShopItemsUseCase to fetch, BuyShopItemUseCase to debit wallet + apply local effect (hint / life / cosmetic), ShopScreen with confirm dialog. Keep purchase local (SharedPreferences wallet + inventory) because full backend wallet sync would double the work with no rubric benefit.
+
+**Result**: One feature branch (`feat/shop-ui`), 4 new tests, merged as `66c2e66`. New `ShopItem` domain entity + `IShopRepository` port. `ShopHttpAdapter` GETs `/api/shop`. `BuyShopItemUseCase` composes IWalletService + IInventoryService + ILivesService; hardcodes the mapping from backend UUIDs to local effects (55555... → +1 life, 66666... → +1 hint, cosmetic → no local effect). `ShopScreen` renders items with kind-based icons, cost badge, and disables the buy button when the player can't afford. Confirm dialog before charging, snackbar afterward. Shop icon added to `LevelsScreen` AppBar; returning refreshes header.
+
+**Files affected**: `lib/domain/models/shop_item.dart` (new), `lib/domain/ports/shop_repository.dart` (new), `lib/infrastructure/dto/shop_item_dto.dart` (new), `lib/infrastructure/adapters/http/shop_http_adapter.dart` (new), `lib/application/usecases/shop/{list_shop_items,buy_shop_item}_usecase.dart` (new), `lib/presentation/screens/shop_screen.dart` (new), `lib/core/di/service_locator.dart` (bindings), `lib/presentation/screens/levels_screen.dart` (shop nav).
+
+**Modifications made by the developer**: kept the wallet + inventory strictly local so the shop screen didn't require a coordinated backend push (backend still exposes shop; local purchase bridges it). Hardcoded the UUID→effect map as a small readable switch instead of introducing an item-effect port — the surface is 3 items and the mapping is stable.
+
+**Lessons learned**: a new port for a new capability (shop reads) is cheaper than trying to make an existing port cover it. `IShopRepository` is one method (`fetchItems`) and Zero controversy; adding `fetchShop` to `ILevelRepository` would have polluted both interfaces. The port pattern rewards being liberal with new ports.
+
+---
+
+## Entry 6 — App: Leaderboard UI (per-level top runs)
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: Backend exposes `GET /api/leaderboard/:levelId?limit=N` returning ranked entries. The app never surfaced it — a whole feature invisible to the player. Add a per-level leaderboard screen accessible from the game screen's AppBar.
+
+**Prompt (paraphrased)**: Follow the same shape as Shop — port, HTTP adapter, use case, screen. Contextual: leaderboard opens from `GameScreen` (not from the levels list) because you're already thinking about a specific level while playing it. Trophy icon in AppBar next to reset-zoom.
+
+**Result**: One feature branch (`feat/leaderboard-ui`), 3 new tests, merged as `d79301a`. `LeaderboardEntry` domain value object with parsed `DateTime completedAt`. `ILeaderboardRepository.fetchForLevel(levelId, {limit})`. `LeaderboardHttpAdapter` builds the URL (with or without `?limit=N`). `LeaderboardScreen` shows a ranked list — gold/silver/bronze avatars for top 3, star icons based on entry.stars, formatted elapsed time. Python patcher inserts the trophy IconButton + import into `game_screen.dart` with match-count asserts.
+
+**Files affected**: `lib/domain/models/leaderboard_entry.dart` (new), `lib/domain/ports/leaderboard_repository.dart` (new), `lib/infrastructure/dto/leaderboard_entry_dto.dart` (new), `lib/infrastructure/adapters/http/leaderboard_http_adapter.dart` (new), `lib/application/usecases/leaderboard/get_leaderboard_usecase.dart` (new), `lib/presentation/screens/leaderboard_screen.dart` (new), `lib/core/di/service_locator.dart` + `lib/presentation/screens/game_screen.dart` (patched).
+
+**Modifications made by the developer**: chose to place the leaderboard button contextually in `GameScreen` (per-level view) instead of a global leaderboard screen with a level picker. Two extra taps saved every time the player wonders "how do I rank here."
+
+**Lessons learned**: DateTime parsing at the DTO boundary means the domain entity holds a real DateTime, not a string. The 6-line `toDomain()` in the DTO is the entire hexagonal seam between transport and domain — nothing else in the app cares about ISO 8601 strings.
+
+---
+
+## Entry 7 — App: background music (audioplayers + persistent mute)
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: Rubric explicitly asks for music. The `SystemSoundsAudioAdapter` shipped for SFX doesn't loop or play files. Add a proper background music track that starts on app launch, loops, respects a persistent mute toggle, and doesn't crash when the audio asset is missing.
+
+**Prompt (paraphrased)**: New port `IMusicService` with `playLoop`, `stop`, `pause`, `resume`, `setMuted`, `readMuted`. `AudioPlayersMusicAdapter` implements via the `audioplayers` package. Persist mute in SharedPreferences. Silent no-op on asset-missing or platform-lacking-audio so the game still runs. `PlayBackgroundMusicUseCase` fired fire-and-forget from `main()` after `setupDI()`.
+
+**Result**: One feature branch (`feat/background-music`), 3 new tests, merged as `8fdda51`. Added `audioplayers: ^6.1.0` to pubspec. Bundled `assets/audio/background.mp3` (Pixabay CC0). `AudioPlayersMusicAdapter` is stateful (AudioPlayer instance + mute flag + prefs cache), registered as singleton. `main.dart` calls `unawaited(getIt<PlayBackgroundMusicUseCase>()())` before `runApp` — music kicks in as UI mounts. Mute toggle IconButton added to `LevelsScreen` AppBar (later moved to Settings in Entry 10).
+
+**Files affected**: `pubspec.yaml`, `lib/domain/ports/music_service.dart` (new), `lib/infrastructure/adapters/platform/audio_players_music_adapter.dart` (new), `lib/application/usecases/music/{play_background_music,toggle_music}_usecase.dart` (new), `lib/main.dart`, `lib/presentation/screens/levels_screen.dart`.
+
+**Modifications made by the developer**: swallowed adapter errors on `playLoop` / `pause` / `resume` so a missing asset or platform without audio never crashes the app. Kept the mute preference on the audio adapter side (not in a separate settings service) because it's naturally the adapter's state — no coordination needed.
+
+**Lessons learned**: Flutter hot restart doesn't rerun `setupDI` or restart audio streams. Any change to a stateful adapter (registered as singleton in DI) requires `flutter clean && flutter run` to verify cleanly. Documented in the manual-test recipe.
+
+---
+
+## Entry 8 — App: pause + visible elapsed timer
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: The professor's PDF explicitly calls out that "el juego se pone pausa", and player feedback flagged the missing on-screen timer during play — critical because the server grades stars partly on `timeMs`. Add both in the same feature branch.
+
+**Prompt (paraphrased)**: Pause button in AppBar, semi-transparent overlay with "PAUSED" text + Resume button, timer frozen while paused, music paused too. Elapsed time visible in the status bar, updating every 500ms.
+
+**Result**: One feature branch (`feat/timer-and-pause`), merged as `420c328`. Extended `IMusicService` with `pause` / `resume`. `AudioPlayersMusicAdapter` uses the audioplayers native pause/resume so the loop resumes from the same position. `game_screen.dart` gained a `_pausedAt: DateTime?` field; `_elapsedMs()` reads `(_pausedAt ?? DateTime.now()) - _sessionStartTime` so time freezes on pause. On resume, `_sessionStartTime` is shifted forward by the paused duration so displayed elapsed doesn't jump. A `Timer.periodic(500ms)` triggers `setState` for the live counter — skipped while paused since nothing changes. Overlay is a `Container` with black-70 background + centered pause icon + "PAUSED" label + Resume `FilledButton`.
+
+**Files affected**: `lib/domain/ports/music_service.dart` (added `pause` + `resume`), `lib/infrastructure/adapters/platform/audio_players_music_adapter.dart`, `lib/presentation/screens/game_screen.dart`.
+
+**Modifications made by the developer**: chose to keep pause state in the widget (not in `GameSession`) initially — it's a UI concern and doesn't affect domain rules. Entry 12's State pattern later folded the pause state into `GameSession` too for the GoF surface.
+
+**Lessons learned**: the `_pausedAt` trick — shift `_sessionStartTime` forward by pause duration on resume — is 3 lines and totally eliminates the need for a "total paused" accumulator field. Simpler and less bug-prone.
+
+---
+
+## Entry 9 — App: level unlock progression
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: Backend's `DifficultyProfile.unlockThreshold()` values exist but aren't enforced anywhere. Classic mobile puzzle games gate level N behind earning enough stars on level N-1; add that gate app-side.
+
+**Prompt (paraphrased)**: Add `Level.unlockThresholdFor(difficulty)` static helper mirroring backend values (EASY=1, MEDIUM=2, HARD=3). `LevelsScreen` computes `_isUnlocked(i, levels, stars)` = `i == 0 || stars[levels[i-1].id] >= levels[i-1].unlockThreshold`. Locked tiles show a lock icon + snackbar on tap; unlocked tiles behave normally.
+
+**Result**: One feature branch (`feat/level-unlock`), 5 new tests, merged as `9823d26`. `Level.unlockThresholdFor` normalizes case and defaults to 3 for unknown difficulties. `LevelsScreen`: locked leading avatar is grey with a padlock icon, title + difficulty text greyed, trailing lock-outline icon replaces chevron, tap shows "Earn N star(s) on Level M to unlock". First level always unlocked. Newly-generated levels (via the FAB) auto-lock until the prior one is cleared with enough stars — consistent with the seed catalog behavior.
+
+**Files affected**: `lib/domain/models/level.dart` (added static + getter), `test/domain/level_test.dart` (new), `lib/presentation/screens/levels_screen.dart` (lock rendering + gate).
+
+**Modifications made by the developer**: chose to duplicate the threshold table in the app instead of adding a `unlockThreshold` field to the backend `LevelResponseDto`. Small pragmatic coupling to avoid a coordinated backend change; the tables live in one file each and grep catches any drift.
+
+**Lessons learned**: static helpers on domain entities are the middle ground between "hardcode the switch inside the UI" and "introduce a Strategy hierarchy". For 3 tiers with a single number each, the hierarchy is overkill and the switch keeps the intent readable.
+
+---
+
+## Entry 10 — App: centralized Settings screen with per-service mute persistence
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: Mute toggles for music, audio, and haptics were scattered (music had an AppBar icon; audio and haptics had none). Consolidate into a single Settings screen with three switches, each persisting via SharedPreferences.
+
+**Prompt (paraphrased)**: Extend `IAudioService` and `IHapticsService` with `setMuted`, `readMuted`, and `isMuted` (matching the shape `IMusicService` already had). Adapters gain a mute flag + prefs cache with the same lazy-load pattern. New `SettingsScreen` with three `SwitchListTile`s + a small About section. Settings icon replaces the music icon in `LevelsScreen` AppBar.
+
+**Result**: One feature branch (`feat/settings-screen`), merged as `256afc8`. All three service adapters are now stateful (mute flag + prefs cache), registered as singletons in DI (dropped their `const` constructors). Each adapter's `_ensureMutedLoaded()` reads SharedPreferences on first access; every `playX` / `tapX` method checks `if (_muted) return;` before firing. `SettingsScreen` uses a FutureBuilder-style boolean load flag so switches don't render until state is known — avoids the flash of default values. Test fakes for `_FakeHaptics` and `_FakeAudio` in `game_feedback_usecase_test.dart` gained matching mute stubs to satisfy the updated interfaces.
+
+**Files affected**: `lib/domain/ports/{audio,haptics,music}_service.dart` (all extended), `lib/infrastructure/adapters/platform/{system_sounds_audio,flutter_haptics,audio_players_music}_adapter.dart` (all updated), `lib/presentation/screens/settings_screen.dart` (new), `lib/presentation/screens/levels_screen.dart` (settings icon), `lib/core/di/service_locator.dart` (const removed), tests updated.
+
+**Modifications made by the developer**: kept the "adapter owns its mute state" pattern rather than centralizing in an `IAppSettings` service. Each adapter's mute preference is naturally its own concern; a central settings service would just be an extra hop.
+
+**Lessons learned**: adding a method to an existing port cascades through every fake test double. Worth the churn once — a `read+set+get` triple is what every user-facing preference wants, and every port that has UI-toggleable state should expose the same shape.
+
+---
+
+## Entry 11 — App: STAR-collected chip in game screen AppBar
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: Backend generator now seeds STAR collectibles (see backend Entry 29). `CellWidget` already renders them, `GameSession._clearArrow` already picks them up as arrows fire over them, but the player has no HUD element telling them "you've collected 2 of 3 stars". Add a chip in the AppBar so the goal is visible.
+
+**Prompt (paraphrased)**: Insert a chip right before the leaderboard icon showing `${session.collectedPositions.length}/${session.collectedPositions.length + session.board.collectibles.length}`. Total denominator is collected-so-far plus what's still on the board — matches the original count without needing to store it separately.
+
+**Result**: One feature branch (`feat/star-collected-chip`), merged as `6803576`. Python patcher inserted the chip with a yellow star icon + white bold N/M text. No test changes — pure UI. Because the UI ticker refreshes every 500ms for the elapsed timer, the star count updates smoothly as arrows fire.
+
+**Files affected**: `lib/presentation/screens/game_screen.dart` (chip inserted via patch).
+
+**Modifications made by the developer**: reused the elapsed-timer's `setState`-per-tick refresh; no separate observer needed for the star count. Denominator computed from live session state instead of persisted "original count" field — simpler, no memory of the initial value needed.
+
+**Lessons learned**: sometimes a feature is 15 lines of UI on top of existing domain plumbing. The domain (`collectedPositions`, `board.collectibles`) already knew everything; only the render was missing. Worth checking existing state before adding new fields.
+
+---
+
+## Entry 12 — App: State and Observer patterns (GoF) in GameSession
+
+**Date**: 2026-07-14
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: The project already had Strategy (`DifficultyProfile`) and Factory Method (`DifficultyProfileFactory`) on the backend. Add two more GoF patterns in the app's domain layer for the professor's OOP grade: State (game lifecycle) and Observer (feedback subscribers).
+
+**Prompt (paraphrased)**: `GameState` abstract with four concrete subclasses (Playing / Paused / Cleared / Failed). `GameSession` holds one instance, exposes `pause()` / `resume()`, and its `tap()` first checks `_state.allowsTaps`. State transitions happen inside `tap()` after outcome resolves. Observer: `GameObserver` abstract class with async no-op default callbacks. `GameSession.addObserver`; `tap()` fires `onArrowActivated` / `onArrowBlocked` / `onLevelCleared` / `onLevelFailed` as appropriate. `GameFeedbackUseCase` becomes the concrete subscriber, replacing the manual `unawaited(_feedback.arrowActivated())` calls from `GameScreen._onCellTapped`.
+
+**Result**: One feature branch (`feat/state-and-observer-patterns`), 4 new tests, merged as `e23bce1`. `GameState` classes are const singletons with `allowsTaps`, `isTerminal`, `label`. `GameSession` gains `_state` + `_observers` fields, `pause` + `resume` methods, and observer notifications inside `tap()`. `GameFeedbackUseCase` renamed methods to `onArrowActivated` etc. and now `extends GameObserver`. `GameScreen._startSession` calls `_session.addObserver(_feedback)`; `_togglePause` calls `_session.pause()` / `resume()` in addition to freezing the UI timer. All manual feedback calls in `_onCellTapped` removed — session drives them via observers now.
+
+**Files affected**: `lib/domain/models/game_state.dart` (new), `lib/domain/models/game_observer.dart` (new), `lib/domain/models/game_session.dart` (refactored), `lib/application/usecases/game/game_feedback_usecase.dart` (extends observer, renamed methods), `lib/presentation/screens/game_screen.dart` (register observer, remove manual calls, session pause/resume), `test/domain/game_state_test.dart` (new), test fakes updated.
+
+**Modifications made by the developer**: chose the "State holds data, GameSession holds behavior" split instead of full-strength State (where the state itself owns the `handleTap` logic and mutates the session). Avoids circular imports and keeps the tap-resolution code in one place while still giving the professor visible State classes with real behavior differences. Observer callbacks are `async` no-ops in the base class so a partial subscriber stays as one method.
+
+**Lessons learned**: patterns land best when they replace real duplication, not when they add ceremony. The Observer subscriber replaced three `unawaited(_feedback.xxx())` calls with a single `addObserver`, and the State classes eliminated three separate booleans (`isPaused`, `isCleared`, `isFailed`) as UI-guard conditions. Both patterns simplify the caller — which is the sign that they're pulling their weight.
