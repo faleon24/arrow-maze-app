@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'core/di/service_locator.dart';
 import 'presentation/auth_guard.dart';
 import 'presentation/screens/auth_gate.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await setupDI();
   runApp(const ArrowMazeApp());
 }
 

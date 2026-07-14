@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../../data/api/level_api.dart';
-import '../../data/dev_level_source.dart';
-import '../../data/api/progress_api.dart';
-import '../../data/models/level_model.dart';
-import '../../data/auth_storage.dart';
+import '../../application/usecases/auth/sign_out_usecase.dart';
+import '../../application/usecases/level/load_levels_catalog_usecase.dart';
+import '../../core/di/service_locator.dart';
+import '../../domain/models/level.dart';
 import 'game_screen.dart';
 import 'login_screen.dart';
 
-/// LevelsScreen — loads the level catalog and the player's progress, and
-/// lists each level with the stars earned so far.
-///
-/// It fetches both the public levels and the authenticated progress in
-/// parallel, then cross-references them: each row shows how many of 3
-/// stars the player has earned on that level (empty if never cleared).
+/// LevelsScreen — lists the published catalog with the player's stars
+/// earned per level. The parallel-load + tolerate-progress-failure
+/// policy lives inside LoadLevelsCatalogUseCase; the screen just
+/// renders whatever LevelsCatalog it gets back.
 class LevelsScreen extends StatefulWidget {
   const LevelsScreen({super.key});
 
@@ -21,38 +18,22 @@ class LevelsScreen extends StatefulWidget {
   State<LevelsScreen> createState() => _LevelsScreenState();
 }
 
-/// Bundles the two things the screen needs, loaded together.
-class _LevelsData {
-  final List<LevelModel> levels;
-  final Map<String, int> starsByLevel;
-  _LevelsData(this.levels, this.starsByLevel);
-}
-
 class _LevelsScreenState extends State<LevelsScreen> {
-  final LevelApi _levelApi = LevelApi();
-  final ProgressApi _progressApi = ProgressApi();
+  final LoadLevelsCatalogUseCase _loadCatalog =
+      getIt<LoadLevelsCatalogUseCase>();
+  final SignOutUseCase _signOut = getIt<SignOutUseCase>();
 
-  late Future<_LevelsData> _dataFuture;
+  late Future<LevelsCatalog> _catalogFuture;
 
   @override
   void initState() {
     super.initState();
-    _dataFuture = _load();
-  }
-      static const bool _useDevLevels =
-      bool.fromEnvironment('USE_DEV_LEVELS', defaultValue: false);
-  Future<_LevelsData> _load() async {
-    final levelsFuture =
-        _useDevLevels ? DevLevelSource.load() : _levelApi.fetchLevels();
-    final starsFuture = _progressApi.fetchStarsByLevel().catchError(
-      (Object _) => <String, int>{},
-    );
-    return _LevelsData(await levelsFuture, await starsFuture);
+    _catalogFuture = _loadCatalog();
   }
 
   void _reload() {
     setState(() {
-      _dataFuture = _load();
+      _catalogFuture = _loadCatalog();
     });
   }
 
@@ -66,7 +47,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
             onPressed: () async {
-              await AuthStorage().clearSession();
+              await _signOut();
               if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -76,8 +57,8 @@ class _LevelsScreenState extends State<LevelsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<_LevelsData>(
-        future: _dataFuture,
+      body: FutureBuilder<LevelsCatalog>(
+        future: _catalogFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -92,9 +73,9 @@ class _LevelsScreenState extends State<LevelsScreen> {
             );
           }
 
-          final data = snapshot.data;
-          final levels = data?.levels ?? [];
-          final starsByLevel = data?.starsByLevel ?? {};
+          final catalog = snapshot.data;
+          final levels = catalog?.levels ?? <Level>[];
+          final starsByLevel = catalog?.starsByLevel ?? <String, int>{};
 
           if (levels.isEmpty) {
             return const Center(child: Text('No levels published yet.'));
@@ -104,7 +85,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             itemCount: levels.length,
             itemBuilder: (context, i) {
               final level = levels[i];
-              final earned = starsByLevel[level.id]; // null if not cleared
+              final earned = starsByLevel[level.id];
 
               return ListTile(
                 leading: CircleAvatar(child: Text('${level.index + 1}')),
@@ -127,7 +108,6 @@ class _LevelsScreenState extends State<LevelsScreen> {
                       ),
                     ),
                   );
-                  // Coming back from a game: refresh so new stars show.
                   _reload();
                 },
               );
@@ -139,8 +119,6 @@ class _LevelsScreenState extends State<LevelsScreen> {
   }
 }
 
-/// Shows three star icons: filled for stars earned, outlined for the
-/// rest. If [earned] is null (never cleared), all three are outlined.
 class _StarRow extends StatelessWidget {
   final int? earned;
 

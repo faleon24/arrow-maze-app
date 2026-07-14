@@ -1,14 +1,12 @@
 import '../../domain/models/board.dart';
 import '../../domain/models/board_builder.dart';
+import '../../domain/models/level.dart';
 
-/// LevelModel — the data-layer representation of a level from the
-/// backend's GET /api/levels endpoint (v2 contract).
-///
-/// v2 changes: [board] is now the arrow-path Board built by
-/// [BoardBuilder.fromJson], which validates structural invariants at
-/// construction. [timeLimitMs] is new — the backend serves it optional
-/// per level (null means no time cap).
-class LevelModel {
+/// LevelDto — transport shape returned by GET /levels (v2 contract).
+/// Board is parsed at DTO construction so a malformed fixture fails
+/// fast with the same FormatException prod code raises. toDomain()
+/// projects into the Level entity that application/presentation see.
+class LevelDto {
   final String id;
   final int index;
   final String difficulty;
@@ -17,7 +15,7 @@ class LevelModel {
   final bool published;
   final Board board;
 
-  LevelModel({
+  LevelDto({
     required this.id,
     required this.index,
     required this.difficulty,
@@ -27,8 +25,8 @@ class LevelModel {
     required this.board,
   });
 
-  factory LevelModel.fromJson(Map<String, dynamic> json) {
-    return LevelModel(
+  factory LevelDto.fromJson(Map<String, dynamic> json) {
+    return LevelDto(
       id: json['id'] as String,
       index: json['index'] as int,
       difficulty: json['difficulty'] as String,
@@ -38,4 +36,14 @@ class LevelModel {
       board: BoardBuilder.fromJson(json['board'] as Map<String, dynamic>),
     );
   }
+
+  Level toDomain() => Level(
+        id: id,
+        index: index,
+        difficulty: difficulty,
+        parTimeMs: parTimeMs,
+        timeLimitMs: timeLimitMs,
+        published: published,
+        board: board,
+      );
 }

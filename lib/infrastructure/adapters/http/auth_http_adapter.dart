@@ -1,36 +1,49 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
-import '../models/auth_response.dart';
+
+import '../../../domain/models/user_session.dart';
+import '../../../domain/ports/auth_repository.dart';
+import '../../dto/auth_response_dto.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
 
-/// AuthApi — the data-layer client for the backend's /auth endpoints.
-///
-/// On a non-2xx status it throws an ApiException carrying the backend's
-/// message field, so the UI can display it directly. Manual message
-/// extraction and the "Exception: " string-slicing that used to live
-/// here now sit inside ApiException.fromResponse.
-class AuthApi {
-  Future<AuthResponse> register({
+/// AuthHttpAdapter — HTTP implementation of IAuthRepository.
+/// Talks to /auth/register and /auth/login. Throws ApiException on
+/// non-2xx (UnauthorizedException on 401).
+class AuthHttpAdapter implements IAuthRepository {
+  const AuthHttpAdapter();
+
+  @override
+  Future<UserSession> register({
     required String email,
     required String password,
     required String displayName,
   }) async {
-    return _post('/auth/register', {
+    final dto = await _post('/auth/register', {
       'email': email,
       'password': password,
       'displayName': displayName,
     });
+    return dto.toDomain();
   }
 
-  Future<AuthResponse> login({
+  @override
+  Future<UserSession> login({
     required String email,
     required String password,
   }) async {
-    return _post('/auth/login', {'email': email, 'password': password});
+    final dto = await _post('/auth/login', {
+      'email': email,
+      'password': password,
+    });
+    return dto.toDomain();
   }
 
-  Future<AuthResponse> _post(String path, Map<String, dynamic> body) async {
+  Future<AuthResponseDto> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     final response = await http
         .post(
           Uri.parse('${ApiConfig.baseUrl}$path'),
@@ -39,7 +52,7 @@ class AuthApi {
         )
         .timeout(ApiConfig.requestTimeout);
     if (response.statusCode == 200 || response.statusCode == 201) {
-      return AuthResponse.fromJson(
+      return AuthResponseDto.fromJson(
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }

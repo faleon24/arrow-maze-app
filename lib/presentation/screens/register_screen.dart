@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../data/api/auth_api.dart';
-import '../../data/api/api_exception.dart';
-import '../../data/auth_storage.dart';
+
+import '../../application/usecases/auth/register_usecase.dart';
+import '../../core/di/service_locator.dart';
+import '../../infrastructure/adapters/http/api_exception.dart';
 import 'levels_screen.dart';
 
-/// RegisterScreen — create a new account with email, password and a
-/// display name. On success it stores the token and goes to the levels
-/// screen, replacing the whole auth stack.
+/// RegisterScreen — creates a new account. The whole "call the API,
+/// then persist the token" flow is a single RegisterUseCase invocation.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -18,8 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
-  final _api = AuthApi();
-  final _storage = AuthStorage();
+  final RegisterUseCase _register = getIt<RegisterUseCase>();
 
   bool _loading = false;
   String? _error;
@@ -39,15 +38,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final auth = await _api.register(
+      await _register(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         displayName: _nameController.text.trim(),
       );
-      await _storage.saveSession(token: auth.token, expiresAt: auth.expiresAt);
 
       if (!mounted) return;
-      // Clear the whole navigation stack and land on the levels screen.
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LevelsScreen()),
         (route) => false,

@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../data/api/auth_api.dart';
-import '../../data/api/api_exception.dart';
-import '../../data/auth_storage.dart';
+import '../../application/usecases/auth/sign_in_usecase.dart';
+import '../../core/di/service_locator.dart';
+import '../../infrastructure/adapters/http/api_exception.dart';
 import 'register_screen.dart';
 import 'levels_screen.dart';
 
-/// LoginScreen — email/password sign-in.
-///
-/// On success it stores the token and replaces itself with the levels
-/// screen. It offers a link to registration for new users. Errors from
-/// the backend (e.g. invalid credentials) are shown inline.
+/// LoginScreen — email/password sign-in. The whole "call the API, then
+/// persist the token" flow is a single SignInUseCase invocation.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -21,8 +18,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _api = AuthApi();
-  final _storage = AuthStorage();
+  final SignInUseCase _signIn = getIt<SignInUseCase>();
 
   bool _loading = false;
   String? _error;
@@ -41,14 +37,12 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final auth = await _api.login(
+      await _signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      await _storage.saveSession(token: auth.token, expiresAt: auth.expiresAt);
 
       if (!mounted) return;
-      // Replace login with the levels screen so "back" doesn't return here.
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const LevelsScreen()),
       );

@@ -41,8 +41,6 @@ class _CellPainter extends CustomPainter {
   final bool isWall;
   final Collectible? collectible;
   final Color? highlight;
-  static const Color _background = Color(0xFF07091A);
-  static const Color _gridLine = Color(0xFF1A2540);
   static const Color _wallGlow = Color(0xFF00E0FF);
   static const Color _wallFill = Color(0xFF0F2B44);
   static const Color _starColor = Color(0xFFFFEE00);

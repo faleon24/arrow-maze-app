@@ -1,28 +1,28 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
-import '../auth_storage.dart';
+import '../../../domain/ports/auth_token_storage.dart';
+import '../../../domain/ports/progress_repository.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
 
-/// ProgressApi — the data-layer client for the protected /me/progress
-/// endpoints. Every call must carry the bearer token; if the token is
-/// missing locally or the backend returns 401, an UnauthorizedException
-/// is thrown so the caller (later, a global handler) can force logout.
-class ProgressApi {
-  final AuthStorage _storage = AuthStorage();
+/// ProgressHttpAdapter — HTTP implementation of IProgressRepository.
+/// Requires an authenticated session; reads the bearer token via the
+/// injected IAuthTokenStorage. Throws UnauthorizedException if there
+/// is no local token or the backend returns 401.
+class ProgressHttpAdapter implements IProgressRepository {
+  final IAuthTokenStorage _tokenStorage;
 
-  /// Submit a run for a level. The backend computes stars server-side
-  /// from [timeMs] and the level's timeLimitMs (Fase 3 server-
-  /// authoritative scoring), so this payload never carries a client-
-  /// supplied stars value — the whitelist ValidationPipe at the seam
-  /// rejects it as an extra property.
+  const ProgressHttpAdapter(this._tokenStorage);
+
+  @override
   Future<void> submitScore({
     required String levelId,
     required int moves,
     required int timeMs,
   }) async {
-    final token = await _storage.readToken();
+    final token = await _tokenStorage.readToken();
     if (token == null) {
       throw const UnauthorizedException('Not signed in');
     }
@@ -45,8 +45,9 @@ class ProgressApi {
     }
   }
 
+  @override
   Future<Map<String, int>> fetchStarsByLevel() async {
-    final token = await _storage.readToken();
+    final token = await _tokenStorage.readToken();
     if (token == null) {
       throw const UnauthorizedException('Not signed in');
     }
