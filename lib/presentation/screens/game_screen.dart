@@ -3,11 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/usecases/game/game_feedback_usecase.dart';
+import '../../application/usecases/game/reveal_hint_usecase.dart';
+import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/progress/submit_level_result_usecase.dart';
+import '../../application/usecases/wallet/award_coins_for_level_usecase.dart';
+import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/level.dart';
 import '../../domain/models/position.dart';
+import '../../domain/models/power_up_items.dart';
+import '../../domain/ports/inventory_service.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
 import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
@@ -40,24 +46,55 @@ class _GameScreenState extends State<GameScreen> {
   final SubmitLevelResultUseCase _submitResult =
       getIt<SubmitLevelResultUseCase>();
   final GameFeedbackUseCase _feedback = getIt<GameFeedbackUseCase>();
+  final RevealHintUseCase _revealHint = getIt<RevealHintUseCase>();
+  final UseGridHighlightUseCase _useGrid = getIt<UseGridHighlightUseCase>();
+  final GetWalletBalanceUseCase _getBalance =
+      getIt<GetWalletBalanceUseCase>();
+  final AwardCoinsForLevelUseCase _awardCoins =
+      getIt<AwardCoinsForLevelUseCase>();
+  final IInventoryService _inventory = getIt<IInventoryService>();
 
   final TransformationController _zoomController = TransformationController();
 
   Position? _blockedFlash;
   Timer? _flashTimer;
+  Timer? _powerUpTimer;
   String? _saveError;
+
+  // Power-up state (loaded async on init; refreshed after each use).
+  int _coinsBalance = 0;
+  int _hintCount = 0;
+  int _gridCount = 0;
+  int _coinsEarnedThisRun = 0;
+  bool _gridMode = false;
+  Position? _hintedHead;
+  List<Position> _gridRay = const <Position>[];
 
   @override
   void initState() {
     super.initState();
     _startSession();
+    _loadPowerUpState();
   }
 
   @override
   void dispose() {
     _flashTimer?.cancel();
+    _powerUpTimer?.cancel();
     _zoomController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPowerUpState() async {
+    final balance = await _getBalance();
+    final hints = await _inventory.getCount(PowerUpItems.hint);
+    final grids = await _inventory.getCount(PowerUpItems.gridHighlight);
+    if (!mounted) return;
+    setState(() {
+      _coinsBalance = balance;
+      _hintCount = hints;
+      _gridCount = grids;
+    });
   }
 
   void _startSession() {
@@ -69,6 +106,10 @@ class _GameScreenState extends State<GameScreen> {
     );
     _blockedFlash = null;
     _saveError = null;
+    _hintedHead = null;
+    _gridRay = const <Position>[];
+    _gridMode = false;
+    _coinsEarnedThisRun = 0;
     _zoomController.value = Matrix4.identity();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _session.isCleared) _submitAndShowWin();
@@ -79,11 +120,77 @@ class _GameScreenState extends State<GameScreen> {
     _zoomController.value = Matrix4.identity();
   }
 
+  Future<void> _useHint() async {
+    final activatable = _session.board.arrows
+        .where((a) => _session.isActivatable(a.id))
+        .map((a) => a.id)
+        .toList(growable: false);
+    final hintedId = await _revealHint(activatableArrowIds: activatable);
+    if (!mounted) return;
+    if (hintedId == null) {
+      _showSnackBar(
+        activatable.isEmpty
+            ? 'No activatable arrows right now'
+            : 'Out of hints',
+      );
+      return;
+    }
+    final arrow = _session.board.arrows.firstWhere((a) => a.id == hintedId);
+    setState(() {
+      _hintedHead = arrow.head;
+      _hintCount = _hintCount > 0 ? _hintCount - 1 : 0;
+      _gridRay = const <Position>[];
+    });
+    _powerUpTimer?.cancel();
+    _powerUpTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _hintedHead = null);
+    });
+  }
+
+  void _toggleGridMode() {
+    if (_gridCount <= 0) {
+      _showSnackBar('Out of grid highlights');
+      return;
+    }
+    setState(() {
+      _gridMode = !_gridMode;
+      if (!_gridMode) _gridRay = const <Position>[];
+    });
+  }
+
+  Future<void> _consumeGridOn(String arrowId) async {
+    final ray = await _useGrid(board: _session.board, arrowId: arrowId);
+    if (!mounted) return;
+    if (ray == null) {
+      _showSnackBar('Out of grid highlights');
+      setState(() => _gridMode = false);
+      return;
+    }
+    setState(() {
+      _gridRay = ray;
+      _gridMode = false;
+      _gridCount = _gridCount > 0 ? _gridCount - 1 : 0;
+      _hintedHead = null;
+    });
+    _powerUpTimer?.cancel();
+    _powerUpTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _gridRay = const <Position>[]);
+    });
+  }
+
   void _onCellTapped(Position position) {
     if (_session.isCleared || _session.isFailed) return;
+    final arrow = _session.board.arrowAt(position);
+    if (arrow == null) return;
+
+    // Grid mode intercepts the tap: show ray instead of activating.
+    if (_gridMode) {
+      unawaited(_consumeGridOn(arrow.id));
+      return;
+    }
+
     final outcome = _session.tap(position);
 
-    // Fire-and-forget feedback so it never blocks the UI.
     if (outcome == TapOutcome.blocked) {
       unawaited(_feedback.arrowBlocked());
     } else {
@@ -92,6 +199,10 @@ class _GameScreenState extends State<GameScreen> {
 
     setState(() {
       _blockedFlash = outcome == TapOutcome.blocked ? position : null;
+      // Any tap clears lingering power-up highlights so they don't
+      // confuse the player about which move to make next.
+      _hintedHead = null;
+      _gridRay = const <Position>[];
     });
     if (outcome == TapOutcome.blocked) {
       _flashTimer?.cancel();
@@ -124,7 +235,37 @@ class _GameScreenState extends State<GameScreen> {
     } catch (e) {
       _saveError = e.toString();
     }
+
+    // Credit coins locally (adapter persists via SharedPreferences).
+    final earned = await _awardCoins(stars: _session.starsEarned);
+    if (mounted) {
+      setState(() {
+        _coinsEarnedThisRun = earned;
+        _coinsBalance += earned;
+      });
+    }
     if (mounted) _showEndDialog(won: true);
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Color? _highlightFor(Position position) {
+    if (_blockedFlash == position) return Colors.red.shade400;
+    if (_hintedHead == position) {
+      return Colors.amberAccent.withValues(alpha: 0.55);
+    }
+    if (_gridRay.contains(position)) {
+      return Colors.cyanAccent.withValues(alpha: 0.35);
+    }
+    return null;
   }
 
   void _showEndDialog({required bool won}) {
@@ -139,6 +280,7 @@ class _GameScreenState extends State<GameScreen> {
             won
                 ? 'You cleared the board in ${_session.movesUsed} moves.\n'
                       'Stars earned: ${'*' * _session.starsEarned}\n'
+                      'Coins earned: +$_coinsEarnedThisRun (total: $_coinsBalance)\n'
                       '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
                 : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
           ),
@@ -192,6 +334,22 @@ class _GameScreenState extends State<GameScreen> {
           'Level ${widget.level.index + 1} - ${widget.level.difficulty}',
         ),
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.monetization_on, color: Colors.amber),
+                const SizedBox(width: 4),
+                Text(
+                  '$_coinsBalance',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.zoom_out_map),
             tooltip: 'Reset zoom',
@@ -204,7 +362,15 @@ class _GameScreenState extends State<GameScreen> {
         child: Column(
           children: [
             _StatusBar(session: _session),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            _PowerUpBar(
+              hintCount: _hintCount,
+              gridCount: _gridCount,
+              gridMode: _gridMode,
+              onHint: _useHint,
+              onGrid: _toggleGridMode,
+            ),
+            const SizedBox(height: 12),
             Expanded(
               child: Center(
                 child: AspectRatio(
@@ -237,9 +403,7 @@ class _GameScreenState extends State<GameScreen> {
                               child: CellWidget(
                                 isWall: board.isWall(position),
                                 collectible: board.collectibleAt(position),
-                                highlight: _blockedFlash == position
-                                    ? Colors.red.shade400
-                                    : null,
+                                highlight: _highlightFor(position),
                               ),
                             );
                           },
@@ -260,6 +424,44 @@ class _GameScreenState extends State<GameScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PowerUpBar extends StatelessWidget {
+  final int hintCount;
+  final int gridCount;
+  final bool gridMode;
+  final VoidCallback onHint;
+  final VoidCallback onGrid;
+
+  const _PowerUpBar({
+    required this.hintCount,
+    required this.gridCount,
+    required this.gridMode,
+    required this.onHint,
+    required this.onGrid,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        FilledButton.tonalIcon(
+          onPressed: hintCount > 0 ? onHint : null,
+          icon: const Icon(Icons.lightbulb_outline),
+          label: Text('Hint ($hintCount)'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: gridCount > 0 ? onGrid : null,
+          icon: Icon(
+            Icons.grid_on,
+            color: gridMode ? Colors.tealAccent : null,
+          ),
+          label: Text(gridMode ? 'Tap an arrow' : 'Grid ($gridCount)'),
+        ),
+      ],
     );
   }
 }
