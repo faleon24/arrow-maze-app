@@ -9,7 +9,7 @@ import 'api_config.dart';
 import 'api_exception.dart';
 
 /// LevelHttpAdapter — HTTP implementation of ILevelRepository.
-/// Public endpoint, no token required.
+/// Public endpoints, no auth token required.
 class LevelHttpAdapter implements ILevelRepository {
   const LevelHttpAdapter();
 
@@ -27,5 +27,22 @@ class LevelHttpAdapter implements ILevelRepository {
               LevelDto.fromJson(item as Map<String, dynamic>).toDomain(),
         )
         .toList();
+  }
+
+  @override
+  Future<Level> generate({required String difficulty}) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}/levels/generate');
+    final response = await http
+        .post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'difficulty': difficulty}),
+        )
+        .timeout(ApiConfig.requestTimeout);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException.fromResponse(response);
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return LevelDto.fromJson(data).toDomain();
   }
 }

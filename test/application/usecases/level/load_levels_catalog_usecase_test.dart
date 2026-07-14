@@ -15,6 +15,11 @@ class _FakeLevelRepository implements ILevelRepository {
     if (nextError != null) throw nextError!;
     return nextResult!;
   }
+  @override
+  Future<Level> generate({required String difficulty}) {
+    throw UnimplementedError();
+  }
+
 }
 
 class _FakeProgressRepository implements IProgressRepository {

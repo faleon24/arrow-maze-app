@@ -8,6 +8,7 @@ import '../../application/usecases/game/game_feedback_usecase.dart';
 import '../../application/usecases/game/reveal_hint_usecase.dart';
 import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/level/get_levels_usecase.dart';
+import '../../application/usecases/level/generate_level_usecase.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../application/usecases/lives/consume_life_usecase.dart';
 import '../../application/usecases/lives/get_lives_usecase.dart';
@@ -117,6 +118,9 @@ Future<void> setupDI() async {
       getIt<GetLevelsUseCase>(),
       getIt<GetStarsByLevelUseCase>(),
     ),
+  );
+  getIt.registerFactory(
+    () => GenerateLevelUseCase(getIt<ILevelRepository>()),
   );
 
   // === Application use cases: game ===
