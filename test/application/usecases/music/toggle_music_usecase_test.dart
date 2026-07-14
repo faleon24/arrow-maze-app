@@ -7,6 +7,8 @@ class _FakeMusicService implements IMusicService {
   int setMutedCalls = 0;
   int playCalls = 0;
   int stopCalls = 0;
+  int pauseCalls = 0;
+  int resumeCalls = 0;
 
   @override
   bool get isMuted => _muted;
@@ -19,6 +21,16 @@ class _FakeMusicService implements IMusicService {
   @override
   Future<void> stop() async {
     stopCalls++;
+  }
+
+  @override
+  Future<void> pause() async {
+    pauseCalls++;
+  }
+
+  @override
+  Future<void> resume() async {
+    resumeCalls++;
   }
 
   @override
@@ -44,7 +56,7 @@ void main() {
     test('should_flip_from_muted_back_to_unmuted_and_return_false',
         () async {
       final service = _FakeMusicService();
-      await service.setMuted(true); // start muted
+      await service.setMuted(true);
       final useCase = ToggleMusicUseCase(service);
 
       final newMuted = await useCase();
