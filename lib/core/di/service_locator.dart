@@ -1,5 +1,9 @@
 import 'package:get_it/get_it.dart';
 
+import '../../application/usecases/auth/register_usecase.dart';
+import '../../application/usecases/auth/restore_session_usecase.dart';
+import '../../application/usecases/auth/sign_in_usecase.dart';
+import '../../application/usecases/auth/sign_out_usecase.dart';
 import '../../domain/ports/auth_repository.dart';
 import '../../domain/ports/auth_token_storage.dart';
 import '../../domain/ports/level_repository.dart';
@@ -18,20 +22,19 @@ import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 final getIt = GetIt.instance;
 
 /// setupDI — the composition root. Registers every port with its
-/// concrete adapter. Called once at app start.
+/// concrete adapter, then every application use case with its port
+/// dependencies. Called once at app start.
 ///
 /// The USE_DEV_LEVELS compile-time flag switches the ILevelRepository
-/// binding to the bundled fixture adapter, so the app can run without
-/// the backend during demos or offline playtesting.
+/// binding to the bundled fixture adapter.
 Future<void> setupDI() async {
+  // === Infrastructure (adapters bound to ports) ===
   getIt.registerLazySingleton<IAuthTokenStorage>(
     () => const SharedPrefsTokenStorage(),
   );
-
   getIt.registerLazySingleton<IAuthRepository>(
     () => const AuthHttpAdapter(),
   );
-
   const useDevLevels =
       bool.fromEnvironment('USE_DEV_LEVELS', defaultValue: false);
   if (useDevLevels) {
@@ -43,8 +46,27 @@ Future<void> setupDI() async {
       () => const LevelHttpAdapter(),
     );
   }
-
   getIt.registerLazySingleton<IProgressRepository>(
     () => ProgressHttpAdapter(getIt<IAuthTokenStorage>()),
+  );
+
+  // === Application use cases ===
+  getIt.registerFactory(
+    () => SignInUseCase(
+      getIt<IAuthRepository>(),
+      getIt<IAuthTokenStorage>(),
+    ),
+  );
+  getIt.registerFactory(
+    () => RegisterUseCase(
+      getIt<IAuthRepository>(),
+      getIt<IAuthTokenStorage>(),
+    ),
+  );
+  getIt.registerFactory(
+    () => SignOutUseCase(getIt<IAuthTokenStorage>()),
+  );
+  getIt.registerFactory(
+    () => RestoreSessionUseCase(getIt<IAuthTokenStorage>()),
   );
 }
