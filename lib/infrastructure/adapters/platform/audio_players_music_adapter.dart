@@ -49,10 +49,24 @@ class AudioPlayersMusicAdapter implements IMusicService {
   Future<void> stop() async {
     try {
       await _player.stop();
-    } catch (_) {
-      // Ignore — nothing was playing.
-    }
+    } catch (_) {}
     _isPlaying = false;
+  }
+
+  @override
+  Future<void> pause() async {
+    if (!_isPlaying) return;
+    try {
+      await _player.pause();
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> resume() async {
+    if (_muted || !_isPlaying) return;
+    try {
+      await _player.resume();
+    } catch (_) {}
   }
 
   @override
@@ -69,9 +83,7 @@ class AudioPlayersMusicAdapter implements IMusicService {
         await _player.setVolume(_volume);
         await _player.play(AssetSource(_currentAsset!));
         _isPlaying = true;
-      } catch (_) {
-        // Ignore.
-      }
+      } catch (_) {}
     }
   }
 }

@@ -12,6 +12,15 @@ abstract class IMusicService {
 
   Future<void> stop();
 
+  /// Pause playback without releasing the source. Cheap enough to
+  /// call whenever the game pauses; [resume] picks up from the same
+  /// position.
+  Future<void> pause();
+
+  /// Resume playback if [pause] was called. No-op if music is muted
+  /// or nothing was ever started.
+  Future<void> resume();
+
   /// Persist and apply the mute preference across app launches.
   Future<void> setMuted(bool muted);
 

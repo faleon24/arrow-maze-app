@@ -18,11 +18,12 @@ import '../../domain/models/lives_state.dart';
 import '../../domain/models/position.dart';
 import '../../domain/models/power_up_items.dart';
 import '../../domain/ports/inventory_service.dart';
+import '../../domain/ports/music_service.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
 import '../auth_guard.dart';
-import 'leaderboard_screen.dart';
 import '../widgets/cell_widget.dart';
 import '../widgets/board_painter.dart';
+import 'leaderboard_screen.dart';
 
 class GameScreen extends StatefulWidget {
   final Level level;
@@ -62,12 +63,17 @@ class _GameScreenState extends State<GameScreen> {
   final GetLivesUseCase _getLives = getIt<GetLivesUseCase>();
   final ConsumeLifeUseCase _consumeLife = getIt<ConsumeLifeUseCase>();
   final IInventoryService _inventory = getIt<IInventoryService>();
+  // Direct port access for pause/resume — the operations are pure
+  // pass-throughs, not orchestration, so a wrapping use case would
+  // add ceremony without value.
+  final IMusicService _music = getIt<IMusicService>();
 
   final TransformationController _zoomController = TransformationController();
 
   Position? _blockedFlash;
   Timer? _flashTimer;
   Timer? _powerUpTimer;
+  Timer? _uiTicker;
   String? _saveError;
 
   int _coinsBalance = 0;
@@ -80,13 +86,17 @@ class _GameScreenState extends State<GameScreen> {
   Position? _hintedHead;
   List<Position> _gridRay = const <Position>[];
 
-  /// Wall-clock start of the current attempt. Elapsed ms is submitted
-  /// so the server's DifficultyProfile.starsFor(timeMs) receives a
-  /// real duration and doesn't grade every run as three stars.
+  /// Wall-clock start of the current attempt (may shift forward when
+  /// pausing, so `elapsed = now - _sessionStartTime` stays correct
+  /// regardless of pause history).
   DateTime? _sessionStartTime;
 
-  /// Guard so we never consume more than one global life per instance
-  /// of this screen (fail path AND dispose path both check it).
+  /// When paused, the instant pause happened. Used to freeze the
+  /// displayed elapsed time and to advance _sessionStartTime by the
+  /// paused duration on resume.
+  DateTime? _pausedAt;
+  bool get _isPaused => _pausedAt != null;
+
   bool _lifeConsumedThisRun = false;
 
   @override
@@ -94,6 +104,7 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     _startSession();
     _loadHeaderState();
+    _startUiTicker();
   }
 
   @override
@@ -104,7 +115,10 @@ class _GameScreenState extends State<GameScreen> {
     }
     _flashTimer?.cancel();
     _powerUpTimer?.cancel();
+    _uiTicker?.cancel();
     _zoomController.dispose();
+    // Ensure music is playing again if the player left the game paused.
+    _music.resume();
     super.dispose();
   }
 
@@ -119,6 +133,16 @@ class _GameScreenState extends State<GameScreen> {
       _hintCount = hints;
       _gridCount = grids;
       _globalLives = lives;
+    });
+  }
+
+  void _startUiTicker() {
+    _uiTicker?.cancel();
+    _uiTicker = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (!mounted) return;
+      // Rebuild so the elapsed-time display refreshes. Skipped when
+      // paused since elapsed is frozen anyway.
+      if (!_isPaused) setState(() {});
     });
   }
 
@@ -138,6 +162,7 @@ class _GameScreenState extends State<GameScreen> {
     _serverStars = null;
     _lifeConsumedThisRun = false;
     _sessionStartTime = DateTime.now();
+    _pausedAt = null;
     _zoomController.value = Matrix4.identity();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _session.isCleared) _submitAndShowWin();
@@ -146,7 +171,31 @@ class _GameScreenState extends State<GameScreen> {
 
   int _elapsedMs() {
     if (_sessionStartTime == null) return 0;
-    return DateTime.now().difference(_sessionStartTime!).inMilliseconds;
+    final effectiveNow = _pausedAt ?? DateTime.now();
+    return effectiveNow.difference(_sessionStartTime!).inMilliseconds;
+  }
+
+  String _formatElapsed(int ms) {
+    final totalSec = ms ~/ 1000;
+    final minutes = totalSec ~/ 60;
+    final seconds = totalSec % 60;
+    if (minutes == 0) return '${seconds}s';
+    return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+
+  void _togglePause() {
+    if (_session.isCleared || _session.isFailed) return;
+    if (_isPaused) {
+      // Resume: advance sessionStartTime by the paused duration so
+      // the displayed elapsed time doesn't jump.
+      final pausedFor = DateTime.now().difference(_pausedAt!);
+      _sessionStartTime = _sessionStartTime!.add(pausedFor);
+      setState(() => _pausedAt = null);
+      _music.resume();
+    } else {
+      setState(() => _pausedAt = DateTime.now());
+      _music.pause();
+    }
   }
 
   void _resetZoom() {
@@ -154,6 +203,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _useHint() async {
+    if (_isPaused) return;
     final activatable = _session.board.arrows
         .where((a) => _session.isActivatable(a.id))
         .map((a) => a.id)
@@ -181,6 +231,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _toggleGridMode() {
+    if (_isPaused) return;
     if (_gridCount <= 0) {
       _showSnackBar('Out of grid highlights');
       return;
@@ -212,6 +263,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onCellTapped(Position position) {
+    if (_isPaused) return;
     if (_session.isCleared || _session.isFailed) return;
     final arrow = _session.board.arrowAt(position);
     if (arrow == null) return;
@@ -272,8 +324,6 @@ class _GameScreenState extends State<GameScreen> {
         moves: _session.movesUsed,
         timeMs: elapsedMs,
       );
-      // Server is authoritative for stars — refetch so both this
-      // dialog and the coin award reflect what actually got recorded.
       final starsByLevel = await _getStarsByLevel();
       serverStars = starsByLevel[widget.level.id];
     } on UnauthorizedException catch (_) {
@@ -320,7 +370,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _showEndDialog({required bool won}) {
     final stars = _serverStars ?? _session.starsEarned;
-    final timeSec = (_elapsedMs() / 1000).toStringAsFixed(1);
+    final timeStr = _formatElapsed(_elapsedMs());
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -330,7 +380,7 @@ class _GameScreenState extends State<GameScreen> {
           title: Text(won ? 'Level cleared!' : 'Out of moves'),
           content: Text(
             won
-                ? 'You cleared the board in ${_session.movesUsed} moves ($timeSec s).\n'
+                ? 'You cleared the board in ${_session.movesUsed} moves ($timeStr).\n'
                       'Stars earned: ${'*' * stars}\n'
                       'Coins earned: +$_coinsEarnedThisRun (total: $_coinsBalance)\n'
                       '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
@@ -388,6 +438,12 @@ class _GameScreenState extends State<GameScreen> {
           'Level ${widget.level.index + 1} - ${widget.level.difficulty}',
         ),
         actions: [
+          IconButton(
+            icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
+            tooltip: _isPaused ? 'Resume' : 'Pause',
+            onPressed:
+                (_session.isCleared || _session.isFailed) ? null : _togglePause,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Row(
@@ -440,7 +496,10 @@ class _GameScreenState extends State<GameScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _StatusBar(session: _session),
+            _StatusBar(
+              session: _session,
+              elapsedText: _formatElapsed(_elapsedMs()),
+            ),
             const SizedBox(height: 12),
             _PowerUpBar(
               hintCount: _hintCount,
@@ -454,54 +513,99 @@ class _GameScreenState extends State<GameScreen> {
               child: Center(
                 child: AspectRatio(
                   aspectRatio: board.cols / board.rows,
-                  child: InteractiveViewer(
-                    transformationController: _zoomController,
-                    minScale: 1.0,
-                    maxScale: 3.5,
-                    panEnabled: true,
-                    scaleEnabled: true,
-                    clipBehavior: Clip.hardEdge,
-                    child: Stack(
-                      children: [
-                        GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: board.cols,
-                          ),
-                          itemCount: board.rows * board.cols,
-                          itemBuilder: (context, i) {
-                            final row = i ~/ board.cols;
-                            final col = i % board.cols;
-                            final position = Position(row, col);
-                            final arrow = board.arrowAt(position);
-                            return GestureDetector(
-                              onTap: arrow != null
-                                  ? () => _onCellTapped(position)
-                                  : null,
-                              child: CellWidget(
-                                isWall: board.isWall(position),
-                                collectible: board.collectibleAt(position),
-                                highlight: _highlightFor(position),
+                  child: Stack(
+                    children: [
+                      InteractiveViewer(
+                        transformationController: _zoomController,
+                        minScale: 1.0,
+                        maxScale: 3.5,
+                        panEnabled: true,
+                        scaleEnabled: true,
+                        clipBehavior: Clip.hardEdge,
+                        child: Stack(
+                          children: [
+                            GridView.builder(
+                              physics:
+                                  const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: board.cols,
                               ),
-                            );
-                          },
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              painter: BoardPainter(board: board),
+                              itemCount: board.rows * board.cols,
+                              itemBuilder: (context, i) {
+                                final row = i ~/ board.cols;
+                                final col = i % board.cols;
+                                final position = Position(row, col);
+                                final arrow = board.arrowAt(position);
+                                return GestureDetector(
+                                  onTap: arrow != null
+                                      ? () => _onCellTapped(position)
+                                      : null,
+                                  child: CellWidget(
+                                    isWall: board.isWall(position),
+                                    collectible:
+                                        board.collectibleAt(position),
+                                    highlight: _highlightFor(position),
+                                  ),
+                                );
+                              },
                             ),
-                          ),
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: CustomPaint(
+                                  painter: BoardPainter(board: board),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      if (_isPaused)
+                        Positioned.fill(
+                          child: _PauseOverlay(onResume: _togglePause),
+                        ),
+                    ],
                   ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PauseOverlay extends StatelessWidget {
+  final VoidCallback onResume;
+  const _PauseOverlay({required this.onResume});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.7),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.pause_circle_outline,
+              color: Colors.white, size: 72),
+          const SizedBox(height: 12),
+          const Text(
+            'PAUSED',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: onResume,
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Resume'),
+          ),
+        ],
       ),
     );
   }
@@ -547,7 +651,8 @@ class _PowerUpBar extends StatelessWidget {
 
 class _StatusBar extends StatelessWidget {
   final GameSession session;
-  const _StatusBar({required this.session});
+  final String elapsedText;
+  const _StatusBar({required this.session, required this.elapsedText});
 
   @override
   Widget build(BuildContext context) {
@@ -564,6 +669,9 @@ class _StatusBar extends StatelessWidget {
             label: 'Moves',
             value: '${session.movesUsed} / ${session.moveLimit}',
           ),
+        ),
+        Expanded(
+          child: _Stat(label: 'Time', value: elapsedText),
         ),
         Expanded(
           child: _Stat(label: 'Attempts', value: '${session.lives}'),
