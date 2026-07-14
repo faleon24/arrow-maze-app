@@ -20,10 +20,8 @@ class _FakeHaptics implements IHapticsService {
 
   @override
   Future<void> lightTap() async => lightTapCount++;
-
   @override
   Future<void> heavyTap() async => heavyTapCount++;
-
   @override
   Future<void> success() async => successCount++;
 }
@@ -45,23 +43,21 @@ class _FakeAudio implements IAudioService {
 
   @override
   Future<void> playArrowActivated() async => activatedCount++;
-
   @override
   Future<void> playArrowBlocked() async => blockedCount++;
-
   @override
   Future<void> playLevelCleared() async => clearedCount++;
 }
 
 void main() {
-  group('GameFeedbackUseCase', () {
+  group('GameFeedbackUseCase (as GameObserver)', () {
     test('should_fire_light_haptic_and_activated_sound_on_arrow_activated',
         () async {
       final haptics = _FakeHaptics();
       final audio = _FakeAudio();
-      final useCase = GameFeedbackUseCase(haptics, audio);
+      final observer = GameFeedbackUseCase(haptics, audio);
 
-      await useCase.arrowActivated();
+      await observer.onArrowActivated();
 
       expect(haptics.lightTapCount, 1);
       expect(audio.activatedCount, 1);
@@ -73,9 +69,9 @@ void main() {
         () async {
       final haptics = _FakeHaptics();
       final audio = _FakeAudio();
-      final useCase = GameFeedbackUseCase(haptics, audio);
+      final observer = GameFeedbackUseCase(haptics, audio);
 
-      await useCase.arrowBlocked();
+      await observer.onArrowBlocked();
 
       expect(haptics.heavyTapCount, 1);
       expect(audio.blockedCount, 1);
@@ -86,9 +82,9 @@ void main() {
         () async {
       final haptics = _FakeHaptics();
       final audio = _FakeAudio();
-      final useCase = GameFeedbackUseCase(haptics, audio);
+      final observer = GameFeedbackUseCase(haptics, audio);
 
-      await useCase.levelCleared();
+      await observer.onLevelCleared();
 
       expect(haptics.successCount, 1);
       expect(audio.clearedCount, 1);
@@ -98,9 +94,9 @@ void main() {
         () async {
       final haptics = _FakeHaptics();
       final audio = _FakeAudio();
-      final useCase = GameFeedbackUseCase(haptics, audio);
+      final observer = GameFeedbackUseCase(haptics, audio);
 
-      await useCase.levelFailed();
+      await observer.onLevelFailed();
 
       expect(haptics.heavyTapCount, 1);
       expect(audio.blockedCount, 1);

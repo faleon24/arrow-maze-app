@@ -1,12 +1,12 @@
 import 'arrow_path.dart';
 import 'board.dart';
 import 'collectible.dart';
+import 'game_observer.dart';
+import 'game_state.dart';
 import 'position.dart';
 
 /// TapOutcome — what a tap resolved to. Modeled as a small hierarchy
-/// (project constraint: no enums). v1 declared the same shape; the two
-/// coexist because they live in separate files and no caller imports
-/// both. When v1 is retired in Phase 5 this becomes the sole definition.
+/// (project constraint: no enums).
 class TapOutcome {
   final String value;
   const TapOutcome._(this.value);
@@ -17,19 +17,12 @@ class TapOutcome {
 
 /// GameSession — v2 state and rules of a single play-through.
 ///
-/// The v2 model swaps single-cell arrows for [ArrowPath]s and adds walls
-/// and collectibles. Core rule survives: an arrow fires only if the ray
-/// from its head to the grid edge, in its direction, is clear of walls
-/// and of any other arrow's cells. Any cell of the arrow's path is a
-/// valid tap target — the whole path clears as one unit. Collectibles
-/// sitting on the ray are gathered when the arrow fires; they do not
-/// block the ray.
-///
-/// The board is treated as immutable: clearing an arrow rebuilds it into
-/// a new [Board] without the cleared path and without collected pickups.
-/// Rebuild cost is O(arrows+walls+collectibles) per clear, fine for the
-/// small boards this game uses. A future optimization (a mutable working
-/// board with delta ops) is deferred until profiling asks for it.
+/// v2 changes: holds an explicit [GameState] (State pattern) and a
+/// list of [GameObserver] subscribers (Observer pattern). Tap
+/// handling first checks `state.allowsTaps`, then executes the
+/// existing ray-clearing logic, then transitions state and fans out
+/// notifications to observers so audio, haptics, analytics etc. react
+/// automatically without the session knowing about them.
 class GameSession {
   Board board;
   final int moveLimit;
@@ -37,9 +30,10 @@ class GameSession {
   int movesUsed;
   int lives;
 
-  /// Positions of collectibles gathered during this session. Consumed by
-  /// star/score computation and by the UI to celebrate pickups.
   final Set<Position> collectedPositions;
+
+  GameState _state;
+  final List<GameObserver> _observers;
 
   GameSession({
     required this.board,
@@ -47,12 +41,39 @@ class GameSession {
     this.maxLives = 3,
   })  : movesUsed = 0,
         lives = maxLives,
-        collectedPositions = <Position>{};
+        collectedPositions = <Position>{},
+        _state = const PlayingState(),
+        _observers = <GameObserver>[];
+
+  /// Current lifecycle state. UI reads `state.allowsTaps` and
+  /// `state.label` instead of composing isCleared/isFailed/isPaused
+  /// checks.
+  GameState get state => _state;
+
+  /// Register [observer] to receive gameplay callbacks.
+  void addObserver(GameObserver observer) {
+    _observers.add(observer);
+  }
+
+  /// Unregister a previously added observer. No-op if not present.
+  void removeObserver(GameObserver observer) {
+    _observers.remove(observer);
+  }
+
+  /// Transition to PausedState. Only valid from PlayingState; other
+  /// states silently ignore the call.
+  void pause() {
+    if (_state is PlayingState) _state = const PausedState();
+  }
+
+  /// Transition back to PlayingState. Only valid from PausedState.
+  void resume() {
+    if (_state is PausedState) _state = const PlayingState();
+  }
 
   /// Is the arrow with [arrowId] free to fire? True only if a ray from
   /// its head, stepping in its direction, reaches the grid edge without
-  /// hitting a wall or another arrow's cells. Unknown ids and empty
-  /// boards yield false.
+  /// hitting a wall or another arrow's cells.
   bool isActivatable(String arrowId) {
     final arrow = _findArrow(arrowId);
     if (arrow == null) return false;
@@ -60,29 +81,56 @@ class GameSession {
     while (board.contains(next)) {
       if (board.isWall(next)) return false;
       final foreign = board.arrowAt(next);
-      // The ray steps outward from head, so it never re-enters this
-      // arrow's own cells — any arrow found on the path is another one.
       if (foreign != null && foreign.id != arrowId) return false;
       next = arrow.direction.apply(next);
     }
     return true;
   }
 
-  /// Tap a board position. Returns what happened. A tap on a non-arrow
-  /// cell is free; a tap on an arrow always costs a move, and costs a
-  /// life too if the ray is blocked.
+  /// Tap a board position. Returns what happened. Delegates the
+  /// allow-taps check to [_state], so PausedState / ClearedState /
+  /// FailedState silently short-circuit to notAnArrow.
   TapOutcome tap(Position position) {
+    if (!_state.allowsTaps) return TapOutcome.notAnArrow;
+
     final arrow = board.arrowAt(position);
     if (arrow == null) return TapOutcome.notAnArrow;
 
     movesUsed++;
+    TapOutcome outcome;
     if (!isActivatable(arrow.id)) {
       lives--;
-      return TapOutcome.blocked;
+      outcome = TapOutcome.blocked;
+    } else {
+      _clearArrow(arrow);
+      outcome = TapOutcome.cleared;
     }
 
-    _clearArrow(arrow);
-    return TapOutcome.cleared;
+    // Notify subscribed observers of the tap event.
+    if (outcome == TapOutcome.blocked) {
+      for (final obs in _observers) {
+        obs.onArrowBlocked();
+      }
+    } else {
+      for (final obs in _observers) {
+        obs.onArrowActivated();
+      }
+    }
+
+    // Transition to terminal states + notify level-scale events.
+    if (isCleared) {
+      _state = const ClearedState();
+      for (final obs in _observers) {
+        obs.onLevelCleared();
+      }
+    } else if (isFailed) {
+      _state = const FailedState();
+      for (final obs in _observers) {
+        obs.onLevelFailed();
+      }
+    }
+
+    return outcome;
   }
 
   ArrowPath? _findArrow(String id) {
@@ -92,8 +140,6 @@ class GameSession {
     return null;
   }
 
-  /// Vacate an arrow's cells and pick up every collectible along its ray.
-  /// Rebuilds [board] into a fresh immutable Board with the remainder.
   void _clearArrow(ArrowPath arrow) {
     final gathered = <Position>{};
     var next = arrow.direction.apply(arrow.head);
