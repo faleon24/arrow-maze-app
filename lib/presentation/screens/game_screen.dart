@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import '../../application/usecases/game/game_feedback_usecase.dart';
 import '../../application/usecases/game/reveal_hint_usecase.dart';
 import '../../application/usecases/game/use_grid_highlight_usecase.dart';
+import '../../application/usecases/lives/consume_life_usecase.dart';
+import '../../application/usecases/lives/get_lives_usecase.dart';
 import '../../application/usecases/progress/submit_level_result_usecase.dart';
 import '../../application/usecases/wallet/award_coins_for_level_usecase.dart';
 import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/level.dart';
+import '../../domain/models/lives_state.dart';
 import '../../domain/models/position.dart';
 import '../../domain/models/power_up_items.dart';
 import '../../domain/ports/inventory_service.dart';
@@ -52,6 +55,8 @@ class _GameScreenState extends State<GameScreen> {
       getIt<GetWalletBalanceUseCase>();
   final AwardCoinsForLevelUseCase _awardCoins =
       getIt<AwardCoinsForLevelUseCase>();
+  final GetLivesUseCase _getLives = getIt<GetLivesUseCase>();
+  final ConsumeLifeUseCase _consumeLife = getIt<ConsumeLifeUseCase>();
   final IInventoryService _inventory = getIt<IInventoryService>();
 
   final TransformationController _zoomController = TransformationController();
@@ -61,39 +66,52 @@ class _GameScreenState extends State<GameScreen> {
   Timer? _powerUpTimer;
   String? _saveError;
 
-  // Power-up state (loaded async on init; refreshed after each use).
   int _coinsBalance = 0;
   int _hintCount = 0;
   int _gridCount = 0;
   int _coinsEarnedThisRun = 0;
+  LivesState? _globalLives;
   bool _gridMode = false;
   Position? _hintedHead;
   List<Position> _gridRay = const <Position>[];
+
+  /// Guard so we never consume more than one global life per instance
+  /// of this screen (fail path AND dispose path both check it).
+  bool _lifeConsumedThisRun = false;
 
   @override
   void initState() {
     super.initState();
     _startSession();
-    _loadPowerUpState();
+    _loadHeaderState();
   }
 
   @override
   void dispose() {
+    // If the player leaves without clearing the level and we did not
+    // already spend a life for a failure, that leave itself costs one.
+    if (!_session.isCleared && !_lifeConsumedThisRun) {
+      _lifeConsumedThisRun = true;
+      // Fire-and-forget: the widget is being torn down; nothing awaits.
+      _consumeLife();
+    }
     _flashTimer?.cancel();
     _powerUpTimer?.cancel();
     _zoomController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadPowerUpState() async {
+  Future<void> _loadHeaderState() async {
     final balance = await _getBalance();
     final hints = await _inventory.getCount(PowerUpItems.hint);
     final grids = await _inventory.getCount(PowerUpItems.gridHighlight);
+    final lives = await _getLives();
     if (!mounted) return;
     setState(() {
       _coinsBalance = balance;
       _hintCount = hints;
       _gridCount = grids;
+      _globalLives = lives;
     });
   }
 
@@ -110,6 +128,7 @@ class _GameScreenState extends State<GameScreen> {
     _gridRay = const <Position>[];
     _gridMode = false;
     _coinsEarnedThisRun = 0;
+    _lifeConsumedThisRun = false;
     _zoomController.value = Matrix4.identity();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _session.isCleared) _submitAndShowWin();
@@ -183,7 +202,6 @@ class _GameScreenState extends State<GameScreen> {
     final arrow = _session.board.arrowAt(position);
     if (arrow == null) return;
 
-    // Grid mode intercepts the tap: show ray instead of activating.
     if (_gridMode) {
       unawaited(_consumeGridOn(arrow.id));
       return;
@@ -199,8 +217,6 @@ class _GameScreenState extends State<GameScreen> {
 
     setState(() {
       _blockedFlash = outcome == TapOutcome.blocked ? position : null;
-      // Any tap clears lingering power-up highlights so they don't
-      // confuse the player about which move to make next.
       _hintedHead = null;
       _gridRay = const <Position>[];
     });
@@ -215,8 +231,22 @@ class _GameScreenState extends State<GameScreen> {
       _submitAndShowWin();
     } else if (_session.isFailed) {
       unawaited(_feedback.levelFailed());
+      _handleFailure();
       _showEndDialog(won: false);
     }
+  }
+
+  void _handleFailure() {
+    if (_lifeConsumedThisRun) return;
+    _lifeConsumedThisRun = true;
+    // Fire-and-forget; UI does not depend on the update completing.
+    unawaited(() async {
+      await _consumeLife();
+      if (!mounted) return;
+      final lives = await _getLives();
+      if (!mounted) return;
+      setState(() => _globalLives = lives);
+    }());
   }
 
   Future<void> _submitAndShowWin() async {
@@ -236,7 +266,6 @@ class _GameScreenState extends State<GameScreen> {
       _saveError = e.toString();
     }
 
-    // Credit coins locally (adapter persists via SharedPreferences).
     final earned = await _awardCoins(stars: _session.starsEarned);
     if (mounted) {
       setState(() {
@@ -282,7 +311,8 @@ class _GameScreenState extends State<GameScreen> {
                       'Stars earned: ${'*' * _session.starsEarned}\n'
                       'Coins earned: +$_coinsEarnedThisRun (total: $_coinsBalance)\n'
                       '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
-                : 'The board still has ${_session.arrowsRemaining} arrows. Try again!',
+                : 'The board still has ${_session.arrowsRemaining} arrows.\n'
+                      '-1 life spent.',
           ),
           actions: [
             TextButton(
@@ -325,6 +355,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     final board = _session.board;
+    final lives = _globalLives;
     return Scaffold(
       backgroundColor: const Color(0xFF07091A),
       appBar: AppBar(
@@ -335,10 +366,26 @@ class _GameScreenState extends State<GameScreen> {
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Row(
               children: [
-                const Icon(Icons.monetization_on, color: Colors.amber),
+                const Icon(Icons.favorite, color: Colors.redAccent, size: 20),
+                const SizedBox(width: 4),
+                Text(
+                  lives != null ? '${lives.current}' : '-',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              children: [
+                const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
                 const SizedBox(width: 4),
                 Text(
                   '$_coinsBalance',
@@ -486,7 +533,9 @@ class _StatusBar extends StatelessWidget {
             value: '${session.movesUsed} / ${session.moveLimit}',
           ),
         ),
-        Expanded(child: _Stat(label: 'Lives', value: '${session.lives}')),
+        Expanded(
+          child: _Stat(label: 'Attempts', value: '${session.lives}'),
+        ),
       ],
     );
   }
