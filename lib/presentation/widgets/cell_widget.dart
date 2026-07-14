@@ -54,14 +54,6 @@ class _CellPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    canvas.drawRect(rect, Paint()..color = _background);
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.5
-        ..color = _gridLine,
-    );
     if (isWall) {
       _drawWall(canvas, size);
     } else if (collectible?.kind == 'STAR') {

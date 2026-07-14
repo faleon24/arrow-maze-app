@@ -14,14 +14,12 @@
         {
           "id": "a1",
           "color": "PINK",
-          "direction": "RIGHT",
-          "cells": ["1,0"]
+          "direction": "UP",
+          "cells": ["2,0", "2,1", "1,1"]
         }
       ],
       "walls": [],
-      "collectibles": [
-        { "position": "1,2", "kind": "STAR" }
-      ]
+      "collectibles": []
     }
   },
   {
@@ -33,26 +31,24 @@
     "published": true,
     "board": {
       "version": 2,
-      "rows": 4,
-      "cols": 4,
+      "rows": 5,
+      "cols": 5,
       "arrows": [
         {
           "id": "a1",
           "color": "BLUE",
-          "direction": "RIGHT",
-          "cells": ["1,0"]
+          "direction": "UP",
+          "cells": ["4,0", "4,1", "4,2", "3,2"]
         },
         {
           "id": "a2",
           "color": "GREEN",
           "direction": "DOWN",
-          "cells": ["1,2"]
+          "cells": ["0,4"]
         }
       ],
-      "walls": ["0,0"],
-      "collectibles": [
-        { "position": "3,2", "kind": "STAR" }
-      ]
+      "walls": [],
+      "collectibles": []
     }
   },
   {
@@ -64,27 +60,30 @@
     "published": true,
     "board": {
       "version": 2,
-      "rows": 5,
-      "cols": 5,
+      "rows": 6,
+      "cols": 6,
       "arrows": [
         {
           "id": "a1",
           "color": "PURPLE",
-          "direction": "RIGHT",
-          "cells": ["2,0", "2,1", "2,2"]
+          "direction": "UP",
+          "cells": ["5,0", "5,1", "5,2", "4,2", "3,2"]
         },
         {
           "id": "a2",
           "color": "YELLOW",
           "direction": "DOWN",
+          "cells": ["0,0", "0,1", "1,1", "1,2"]
+        },
+        {
+          "id": "a3",
+          "color": "GREEN",
+          "direction": "RIGHT",
           "cells": ["0,4"]
         }
       ],
-      "walls": ["0,0"],
-      "collectibles": [
-        { "position": "2,4", "kind": "STAR" },
-        { "position": "3,4", "kind": "STAR" }
-      ]
+      "walls": [],
+      "collectibles": []
     }
   }
 ]

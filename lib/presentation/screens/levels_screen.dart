@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/api/level_api.dart';
+import '../../data/dev_level_source.dart';
 import '../../data/api/progress_api.dart';
 import '../../data/models/level_model.dart';
 import '../../data/auth_storage.dart';
@@ -38,9 +39,11 @@ class _LevelsScreenState extends State<LevelsScreen> {
     super.initState();
     _dataFuture = _load();
   }
-
+      static const bool _useDevLevels =
+      bool.fromEnvironment('USE_DEV_LEVELS', defaultValue: false);
   Future<_LevelsData> _load() async {
-    final levelsFuture = _levelApi.fetchLevels();
+    final levelsFuture =
+        _useDevLevels ? DevLevelSource.load() : _levelApi.fetchLevels();
     final starsFuture = _progressApi.fetchStarsByLevel().catchError(
       (Object _) => <String, int>{},
     );
