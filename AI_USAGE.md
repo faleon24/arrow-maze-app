@@ -142,3 +142,41 @@ Final counts at merge: tests 60 → 78, analyzer 0 issues, 47 files touched.
 - **Local persistence adapters buy you the same seams as server ones**. `SharedPrefsWalletAdapter` and a future `HttpWalletAdapter` share the port. Use cases and presentation don't know or care. Migration is a single-line change in `setupDI` when the backend endpoint is ready.
 - **Double-consume guards are 1-line, missing them is 30 minutes of debug**. `_lifeConsumedThisRun` was cheap; without it, "player fails a level" would consume 1 life at the fail branch AND another at dispose. Guarded once, correct forever.
 - **`unawaited` is the right tool when the future's result is intentionally ignored**. Silences `unawaited_futures` lint without hiding actual mistakes. Combined with fire-and-forget UI feedback, it keeps the tap response instant.
+
+---
+
+## Entry 4 — App: generate-more FAB and star-bug fix (real timeMs + server refetch)
+
+**Date**: 2026-07-13
+**Tool**: Claude Opus 4.7 (via Cowork desktop app)
+**Task**: After Entries 2-3 shipped the hexagonal skeleton and game-feel features, playtest surfaced two gaps. First, the backend's `POST /api/levels/generate` endpoint existed but the app had no UI to hit it — a full-stack integration that only worked from `curl`. Second, the win dialog always displayed "Stars earned: * * *" (3 stars) even when the player had spent multiple attempts on blocked taps, because the app hardcoded `timeMs: 0` in the score submission — server's `starsFor(0)` returned 3 unconditionally.
+
+**Prompt (paraphrased)**: I asked Claude to (a) wire the "Generate more levels" button as an atomic feature branch (FAB + bottom sheet + use case + port method), and (b) find the source of the always-3-stars bug and fix it end-to-end so the dialog matches what the server records.
+
+**Result**: Two feature branches, both merged to main.
+
+- **`merge: generate more levels on demand from the app`** (commit `8c6a97d`): extended `ILevelRepository` with `generate({required String difficulty})`; `LevelHttpAdapter` POSTs to `/levels/generate` and parses the returned level via existing `LevelDto.fromJson().toDomain()`; `DevLevelAdapter` throws `UnsupportedError` (offline fixture has nothing to generate against). New use case `GenerateLevelUseCase` — a thin wrapper that delegates to the port. Registered in DI. In `LevelsScreen`: added a `FloatingActionButton.extended` labeled "Generate level" that opens a `showModalBottomSheet` with three `ListTile` options (EASY/MEDIUM/HARD); tapping one invokes the use case, shows a loading indicator on the FAB, and calls `_reload()` on success so the new level appears at the bottom of the catalog. Two fake-driven tests cover argument passthrough and error propagation. Updated the fakes in `get_levels_usecase_test` and `load_levels_catalog_usecase_test` to include the new stub method (Python inline patcher, asserts on match count so a silent no-op fails the batch). Test total went from 96 to 98.
+
+- **`merge: fix always-3-stars bug and align dialog with server`** (commit under branch `fix/real-timems-and-server-stars`): added `DateTime? _sessionStartTime` field in `_GameScreenState`, set in `_startSession()`, used by a new `_elapsedMs()` helper. `_submitAndShowWin()` now passes `elapsedMs` to `_submitResult` and, on success, refetches stars via `GetStarsByLevelUseCase` to get the server's decision. `_serverStars` field stores that value; the dialog reads `_serverStars ?? _session.starsEarned` and displays both the actual elapsed seconds and the star count. `_coinsEarnedThisRun` now credits based on the server's stars (not the client's optimistic estimate), so the wallet and the dialog agree. No app tests changed — the fix is entirely inside the state-managing methods, no domain contract shift.
+
+Together with the backend's parallel fix (`stars = min(movesBased, timeBased)`, see backend AI_USAGE Entry 27), the loop now behaves correctly end-to-end: a fast clean run shows 3 stars in the dialog AND in the levels list; a fast run with two blocked taps shows 1 star everywhere.
+
+**Files affected**:
+- **Domain**: `lib/domain/ports/level_repository.dart` (added `generate` method)
+- **Infrastructure**: `lib/infrastructure/adapters/http/level_http_adapter.dart` (POST /generate), `lib/infrastructure/adapters/local/dev_level_adapter.dart` (throws)
+- **Application**: `lib/application/usecases/level/generate_level_usecase.dart` (new)
+- **Presentation**: `lib/presentation/screens/levels_screen.dart` (FAB + bottom sheet + reload), `lib/presentation/screens/game_screen.dart` (session start time, elapsed ms, server-stars refetch, dialog display)
+- **DI**: `lib/core/di/service_locator.dart` (added generate use case)
+- **Tests**: `test/application/usecases/level/generate_level_usecase_test.dart` (new, 2 tests), `test/application/usecases/level/get_levels_usecase_test.dart` (added stub for new port method), `test/application/usecases/level/load_levels_catalog_usecase_test.dart` (added stub)
+
+**Modifications made by the developer**:
+- Kept `_session.starsEarned` (client's attempts-based estimate) as the fallback in the dialog display, so if the server refetch fails the player still sees a reasonable number instead of a "-". The `??` operator makes the fallback silent.
+- Held on adding `IBoardGenerator` as an abstraction layer between the use case and the concrete `RandomBoardGenerator` on the backend side; the app-side `GenerateLevelUseCase` correctly stays as a thin wrapper over `ILevelRepository.generate` because the app doesn't own the generator — the server does. This is the correct hexagonal shape: the port abstracts the REMOTE capability.
+- Documented in `DevLevelAdapter.generate`'s throw message that offline fixture cannot fulfil generation, so a future contributor toggling `USE_DEV_LEVELS=true` and hitting the FAB gets a legible error instead of a silent hang.
+- Ran cold restart (`flutter clean && flutter run`) after the fix because Flutter's hot restart doesn't rerun `setupDI()` — the app was seeing cached bindings. Documented in the manual test recipe.
+
+**Lessons learned**:
+- **A hardcoded `0` in a submitted field is invisible when the receiving side has a "0 is fine" fallback**. `timeMs: 0` was written in the initial `_submitAndShowWin` as a placeholder ("we'll fix this later"); the backend's `starsFor(0)` returned 3 (the fastest bucket), so every run recorded a max score and the placeholder shipped. The moment you hardcode a magic value at a seam, it becomes production behavior; either compute the real value or throw so the seam fails loudly.
+- **Server-side refetch is the right way to keep dialog stars in sync with list stars**. Trying to duplicate the server's grading formula on the client would drift the moment either side changed. Refetching after submit costs one round-trip and guarantees the two surfaces show the same number.
+- **A FAB is worth more than a menu entry when the action is the one the player will want most often**. The bottom-sheet difficulty picker is one extra tap, but it makes the difficulty choice explicit — critical when EASY, MEDIUM, and HARD produce visibly different boards. Skipping the picker and defaulting to "surprise me" would have hidden the generator's variety.
+- **Cold restart matters after DI changes**. `flutter clean && flutter pub get && flutter run` reset the isolate and re-ran `setupDI`. Any change to `service_locator.dart` — new binding, changed adapter — requires this dance because `get_it` registrations happen once at start and hot restart doesn't clear the singleton state.
