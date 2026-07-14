@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
+import '../application/usecases/auth/sign_out_usecase.dart';
 import '../core/di/service_locator.dart';
-import '../domain/ports/auth_token_storage.dart';
 import 'screens/login_screen.dart';
 
 /// AuthGuard — global 401 / UnauthorizedException handler.
 ///
 /// Any authenticated screen that catches an UnauthorizedException
-/// should call AuthGuard.signOut() from that catch block. The guard
-/// clears the persisted session and pushes LoginScreen as the sole
-/// route on the navigator stack.
+/// should call AuthGuard.signOut() from that catch block. Delegates
+/// the actual session clearing to SignOutUseCase; the guard's only
+/// responsibility is the navigation reset.
 class AuthGuard {
   AuthGuard._();
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
   static Future<void> signOut() async {
-    await getIt<IAuthTokenStorage>().clearSession();
+    await getIt<SignOutUseCase>()();
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../application/usecases/auth/sign_out_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/level.dart';
-import '../../domain/ports/auth_token_storage.dart';
 import '../../domain/ports/level_repository.dart';
 import '../../domain/ports/progress_repository.dart';
 import 'game_screen.dart';
@@ -27,6 +27,7 @@ class _LevelsData {
 class _LevelsScreenState extends State<LevelsScreen> {
   final ILevelRepository _levelRepo = getIt<ILevelRepository>();
   final IProgressRepository _progressRepo = getIt<IProgressRepository>();
+  final SignOutUseCase _signOut = getIt<SignOutUseCase>();
 
   late Future<_LevelsData> _dataFuture;
 
@@ -60,7 +61,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
             onPressed: () async {
-              await getIt<IAuthTokenStorage>().clearSession();
+              await _signOut();
               if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),

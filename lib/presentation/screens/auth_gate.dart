@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../application/usecases/auth/restore_session_usecase.dart';
 import '../../core/di/service_locator.dart';
-import '../../domain/ports/auth_token_storage.dart';
 import 'login_screen.dart';
 import 'levels_screen.dart';
 
 /// AuthGate — the app's entry point.
 ///
-/// Checks for a stored, non-expired session and routes accordingly:
-/// LevelsScreen if a valid token is present, LoginScreen otherwise.
+/// Delegates the "do I have a valid session on disk?" question to the
+/// RestoreSessionUseCase. If a session is returned, the levels screen
+/// is mounted; otherwise the login screen. A CircularProgressIndicator
+/// is shown while the check is in flight.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
   @override
@@ -15,7 +17,8 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  final IAuthTokenStorage _storage = getIt<IAuthTokenStorage>();
+  final RestoreSessionUseCase _restoreSession =
+      getIt<RestoreSessionUseCase>();
   late Future<bool> _hasValidSessionFuture;
 
   @override
@@ -25,14 +28,8 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<bool> _hasValidSession() async {
-    final token = await _storage.readToken();
-    if (token == null || token.isEmpty) return false;
-    final expiresAt = await _storage.readExpiresAt();
-    if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
-      await _storage.clearSession();
-      return false;
-    }
-    return true;
+    final session = await _restoreSession();
+    return session != null;
   }
 
   @override

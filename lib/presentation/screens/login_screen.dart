@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../application/usecases/auth/sign_in_usecase.dart';
 import '../../core/di/service_locator.dart';
-import '../../domain/ports/auth_repository.dart';
-import '../../domain/ports/auth_token_storage.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
 import 'register_screen.dart';
 import 'levels_screen.dart';
 
-/// LoginScreen — email/password sign-in.
+/// LoginScreen — email/password sign-in. The whole "call the API, then
+/// persist the token" flow is a single SignInUseCase invocation.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,8 +18,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final IAuthRepository _api = getIt<IAuthRepository>();
-  final IAuthTokenStorage _storage = getIt<IAuthTokenStorage>();
+  final SignInUseCase _signIn = getIt<SignInUseCase>();
 
   bool _loading = false;
   String? _error;
@@ -38,13 +37,9 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final session = await _api.login(
+      await _signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
-      );
-      await _storage.saveSession(
-        token: session.token,
-        expiresAt: session.expiresAt,
       );
 
       if (!mounted) return;
