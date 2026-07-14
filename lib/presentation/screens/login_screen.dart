@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../domain/ports/auth_repository.dart';
 import '../../domain/ports/auth_token_storage.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
-import '../../infrastructure/adapters/http/auth_http_adapter.dart';
-import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'register_screen.dart';
 import 'levels_screen.dart';
 
 /// LoginScreen — email/password sign-in.
-///
-/// On success it stores the token and replaces itself with the levels
-/// screen. It offers a link to registration for new users. Errors from
-/// the backend (e.g. invalid credentials) are shown inline.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -23,8 +18,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final IAuthRepository _api = const AuthHttpAdapter();
-  final IAuthTokenStorage _storage = const SharedPrefsTokenStorage();
+  final IAuthRepository _api = getIt<IAuthRepository>();
+  final IAuthTokenStorage _storage = getIt<IAuthTokenStorage>();
 
   bool _loading = false;
   String? _error;
@@ -53,7 +48,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
-      // Replace login with the levels screen so "back" doesn't return here.
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const LevelsScreen()),
       );

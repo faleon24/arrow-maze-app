@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../domain/ports/auth_repository.dart';
 import '../../domain/ports/auth_token_storage.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
-import '../../infrastructure/adapters/http/auth_http_adapter.dart';
-import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'levels_screen.dart';
 
-/// RegisterScreen — create a new account with email, password and a
+/// RegisterScreen — create a new account with email, password and
 /// display name. On success it stores the token and goes to the levels
 /// screen, replacing the whole auth stack.
 class RegisterScreen extends StatefulWidget {
@@ -21,8 +20,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
-  final IAuthRepository _api = const AuthHttpAdapter();
-  final IAuthTokenStorage _storage = const SharedPrefsTokenStorage();
+  final IAuthRepository _api = getIt<IAuthRepository>();
+  final IAuthTokenStorage _storage = getIt<IAuthTokenStorage>();
 
   bool _loading = false;
   String? _error;
@@ -53,7 +52,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (!mounted) return;
-      // Clear the whole navigation stack and land on the levels screen.
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LevelsScreen()),
         (route) => false,

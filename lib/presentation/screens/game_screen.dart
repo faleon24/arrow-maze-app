@@ -2,13 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/level.dart';
 import '../../domain/models/position.dart';
 import '../../domain/ports/progress_repository.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
-import '../../infrastructure/adapters/http/progress_http_adapter.dart';
-import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
 import '../widgets/board_painter.dart';
@@ -37,8 +36,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
-  final IProgressRepository _progressRepo =
-      const ProgressHttpAdapter(SharedPrefsTokenStorage());
+  final IProgressRepository _progressRepo = getIt<IProgressRepository>();
 
   Position? _blockedFlash;
   Timer? _flashTimer;

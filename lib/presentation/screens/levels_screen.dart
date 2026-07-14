@@ -1,21 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../domain/models/level.dart';
+import '../../domain/ports/auth_token_storage.dart';
 import '../../domain/ports/level_repository.dart';
 import '../../domain/ports/progress_repository.dart';
-import '../../infrastructure/adapters/http/level_http_adapter.dart';
-import '../../infrastructure/adapters/http/progress_http_adapter.dart';
-import '../../infrastructure/adapters/local/dev_level_adapter.dart';
-import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'game_screen.dart';
 import 'login_screen.dart';
 
 /// LevelsScreen — loads the level catalog and the player's progress, and
 /// lists each level with the stars earned so far.
-///
-/// It fetches both the public levels and the authenticated progress in
-/// parallel, then cross-references them: each row shows how many of 3
-/// stars the player has earned on that level (empty if never cleared).
 class LevelsScreen extends StatefulWidget {
   const LevelsScreen({super.key});
 
@@ -31,14 +25,8 @@ class _LevelsData {
 }
 
 class _LevelsScreenState extends State<LevelsScreen> {
-  static const bool _useDevLevels =
-      bool.fromEnvironment('USE_DEV_LEVELS', defaultValue: false);
-
-  final ILevelRepository _levelRepo = _useDevLevels
-      ? const DevLevelAdapter()
-      : const LevelHttpAdapter();
-  final IProgressRepository _progressRepo =
-      const ProgressHttpAdapter(SharedPrefsTokenStorage());
+  final ILevelRepository _levelRepo = getIt<ILevelRepository>();
+  final IProgressRepository _progressRepo = getIt<IProgressRepository>();
 
   late Future<_LevelsData> _dataFuture;
 
@@ -72,7 +60,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
             onPressed: () async {
-              await const SharedPrefsTokenStorage().clearSession();
+              await getIt<IAuthTokenStorage>().clearSession();
               if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -133,7 +121,6 @@ class _LevelsScreenState extends State<LevelsScreen> {
                       ),
                     ),
                   );
-                  // Coming back from a game: refresh so new stars show.
                   _reload();
                 },
               );
@@ -145,8 +132,6 @@ class _LevelsScreenState extends State<LevelsScreen> {
   }
 }
 
-/// Shows three star icons: filled for stars earned, outlined for the
-/// rest. If [earned] is null (never cleared), all three are outlined.
 class _StarRow extends StatelessWidget {
   final int? earned;
 

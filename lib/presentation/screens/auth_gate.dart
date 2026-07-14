@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/di/service_locator.dart';
 import '../../domain/ports/auth_token_storage.dart';
-import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
 import 'login_screen.dart';
 import 'levels_screen.dart';
 
@@ -8,11 +8,6 @@ import 'levels_screen.dart';
 ///
 /// Checks for a stored, non-expired session and routes accordingly:
 /// LevelsScreen if a valid token is present, LoginScreen otherwise.
-/// If the token is present but its expiry is in the past, the session
-/// is cleared before routing — no need to fire a doomed request first.
-///
-/// A CircularProgressIndicator is shown while the read is in flight;
-/// it is quick (SharedPreferences), so the flash is barely visible.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
   @override
@@ -20,8 +15,9 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  final IAuthTokenStorage _storage = const SharedPrefsTokenStorage();
+  final IAuthTokenStorage _storage = getIt<IAuthTokenStorage>();
   late Future<bool> _hasValidSessionFuture;
+
   @override
   void initState() {
     super.initState();
@@ -33,8 +29,6 @@ class _AuthGateState extends State<AuthGate> {
     if (token == null || token.isEmpty) return false;
     final expiresAt = await _storage.readExpiresAt();
     if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
-      // Locally expired — clear before routing so a subsequent launch
-      // does not repeat the check-and-clear dance.
       await _storage.clearSession();
       return false;
     }
