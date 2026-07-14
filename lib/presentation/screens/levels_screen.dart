@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/usecases/auth/sign_out_usecase.dart';
 import '../../application/usecases/level/generate_level_usecase.dart';
+import '../../application/usecases/music/toggle_music_usecase.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../application/usecases/lives/get_lives_usecase.dart';
 import '../../application/usecases/lives/purchase_life_usecase.dart';
@@ -29,6 +30,8 @@ class _LevelsScreenState extends State<LevelsScreen> {
   final GetWalletBalanceUseCase _getBalance =
       getIt<GetWalletBalanceUseCase>();
   final GenerateLevelUseCase _generateLevel = getIt<GenerateLevelUseCase>();
+  final ToggleMusicUseCase _toggleMusic = getIt<ToggleMusicUseCase>();
+  bool _musicMuted = false;
 
   late Future<LevelsCatalog> _catalogFuture;
   LivesState? _lives;
@@ -40,6 +43,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
     super.initState();
     _catalogFuture = _loadCatalog();
     _refreshHeader();
+    _musicMuted = _toggleMusic.isMuted;
   }
 
   Future<void> _refreshHeader() async {
@@ -174,6 +178,12 @@ class _LevelsScreenState extends State<LevelsScreen> {
     );
   }
 
+  Future<void> _handleToggleMusic() async {
+    final newMuted = await _toggleMusic();
+    if (!mounted) return;
+    setState(() => _musicMuted = newMuted);
+  }
+
   @override
   Widget build(BuildContext context) {
     final lives = _lives;
@@ -203,6 +213,13 @@ class _LevelsScreenState extends State<LevelsScreen> {
             icon: const Icon(Icons.shopping_bag_outlined),
             tooltip: 'Shop',
             onPressed: () => _openShop(context),
+          ),
+          IconButton(
+            icon: Icon(
+              _musicMuted ? Icons.music_off : Icons.music_note,
+            ),
+            tooltip: _musicMuted ? 'Unmute music' : 'Mute music',
+            onPressed: _handleToggleMusic,
           ),
           IconButton(
             icon: const Icon(Icons.logout),

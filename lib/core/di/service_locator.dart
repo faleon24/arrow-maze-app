@@ -10,6 +10,10 @@ import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/level/generate_level_usecase.dart';
 import '../../application/usecases/level/get_levels_usecase.dart';
 import '../../application/usecases/leaderboard/get_leaderboard_usecase.dart';
+import '../../application/usecases/music/play_background_music_usecase.dart';
+import '../../application/usecases/music/toggle_music_usecase.dart';
+import '../../domain/ports/music_service.dart';
+import '../../infrastructure/adapters/platform/audio_players_music_adapter.dart';
 import '../../domain/ports/leaderboard_repository.dart';
 import '../../infrastructure/adapters/http/leaderboard_http_adapter.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
@@ -93,6 +97,9 @@ Future<void> setupDI() async {
   );
   getIt.registerLazySingleton<ILeaderboardRepository>(
     () => const LeaderboardHttpAdapter(),
+  );
+  getIt.registerLazySingleton<IMusicService>(
+    () => AudioPlayersMusicAdapter(),
   );
 
   // === Domain services ===
@@ -194,5 +201,13 @@ Future<void> setupDI() async {
   // === Application use cases: leaderboard ===
   getIt.registerFactory(
     () => GetLeaderboardUseCase(getIt<ILeaderboardRepository>()),
+  );
+
+  // === Application use cases: music ===
+  getIt.registerLazySingleton(
+    () => PlayBackgroundMusicUseCase(getIt<IMusicService>()),
+  );
+  getIt.registerLazySingleton(
+    () => ToggleMusicUseCase(getIt<IMusicService>()),
   );
 }
