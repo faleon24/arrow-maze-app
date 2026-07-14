@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/usecases/auth/sign_out_usecase.dart';
+import '../../application/usecases/level/generate_level_usecase.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../application/usecases/lives/get_lives_usecase.dart';
 import '../../application/usecases/lives/purchase_life_usecase.dart';
@@ -26,10 +27,12 @@ class _LevelsScreenState extends State<LevelsScreen> {
   final PurchaseLifeUseCase _purchaseLife = getIt<PurchaseLifeUseCase>();
   final GetWalletBalanceUseCase _getBalance =
       getIt<GetWalletBalanceUseCase>();
+  final GenerateLevelUseCase _generateLevel = getIt<GenerateLevelUseCase>();
 
   late Future<LevelsCatalog> _catalogFuture;
   LivesState? _lives;
   int _coins = 0;
+  bool _generating = false;
 
   @override
   void initState() {
@@ -63,38 +66,22 @@ class _LevelsScreenState extends State<LevelsScreen> {
       final msg = (lives != null && lives.isFull)
           ? 'Already at max lives'
           : 'Not enough coins (need ${PurchaseLifeUseCase.cost})';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showSnack(msg);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '+1 life (-${PurchaseLifeUseCase.cost} coins)',
-        ),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    _showSnack('+1 life (-${PurchaseLifeUseCase.cost} coins)');
     await _refreshHeader();
   }
 
-  void _openLevel(BuildContext context, Level level, List<Level> levels,
-      int index) async {
+  void _openLevel(
+    BuildContext context,
+    Level level,
+    List<Level> levels,
+    int index,
+  ) async {
     final lives = _lives;
     if (lives != null && lives.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('No lives left. Buy one with coins to play.'),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showSnack('No lives left. Buy one with coins to play.');
       return;
     }
     await Navigator.of(context).push(
@@ -107,6 +94,75 @@ class _LevelsScreenState extends State<LevelsScreen> {
       ),
     );
     _reload();
+  }
+
+  void _openGenerateSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                'Generate a new level',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Pick a difficulty and the server crafts a solvable puzzle.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final d in const ['EASY', 'MEDIUM', 'HARD'])
+              ListTile(
+                leading: const Icon(Icons.auto_awesome),
+                title: Text(d),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _generateAndRefresh(d);
+                },
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _generateAndRefresh(String difficulty) async {
+    if (_generating) return;
+    setState(() => _generating = true);
+    try {
+      final level = await _generateLevel(difficulty: difficulty);
+      if (!mounted) return;
+      _showSnack(
+        'Generated ${level.difficulty} level #${level.index + 1}',
+      );
+      _reload();
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Generation failed: $e');
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -147,6 +203,20 @@ class _LevelsScreenState extends State<LevelsScreen> {
             },
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _generating ? null : _openGenerateSheet,
+        icon: _generating
+            ? const SizedBox(
+                height: 16,
+                width: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.auto_awesome),
+        label: Text(_generating ? 'Generating...' : 'Generate level'),
       ),
       body: FutureBuilder<LevelsCatalog>(
         future: _catalogFuture,
