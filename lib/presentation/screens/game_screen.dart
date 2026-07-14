@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/usecases/progress/submit_level_result_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/level.dart';
 import '../../domain/models/position.dart';
-import '../../domain/ports/progress_repository.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
 import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
@@ -36,7 +36,8 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
-  final IProgressRepository _progressRepo = getIt<IProgressRepository>();
+  final SubmitLevelResultUseCase _submitResult =
+      getIt<SubmitLevelResultUseCase>();
 
   Position? _blockedFlash;
   Timer? _flashTimer;
@@ -90,7 +91,7 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _submitAndShowWin() async {
     _saveError = null;
     try {
-      await _progressRepo.submitScore(
+      await _submitResult(
         levelId: widget.level.id,
         moves: _session.movesUsed,
         timeMs: 0,

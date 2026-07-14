@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../application/usecases/auth/sign_out_usecase.dart';
+import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/level.dart';
-import '../../domain/ports/level_repository.dart';
-import '../../domain/ports/progress_repository.dart';
 import 'game_screen.dart';
 import 'login_screen.dart';
 
-/// LevelsScreen — loads the level catalog and the player's progress, and
-/// lists each level with the stars earned so far.
+/// LevelsScreen — lists the published catalog with the player's stars
+/// earned per level. The parallel-load + tolerate-progress-failure
+/// policy lives inside LoadLevelsCatalogUseCase; the screen just
+/// renders whatever LevelsCatalog it gets back.
 class LevelsScreen extends StatefulWidget {
   const LevelsScreen({super.key});
 
@@ -17,37 +18,22 @@ class LevelsScreen extends StatefulWidget {
   State<LevelsScreen> createState() => _LevelsScreenState();
 }
 
-/// Bundles the two things the screen needs, loaded together.
-class _LevelsData {
-  final List<Level> levels;
-  final Map<String, int> starsByLevel;
-  _LevelsData(this.levels, this.starsByLevel);
-}
-
 class _LevelsScreenState extends State<LevelsScreen> {
-  final ILevelRepository _levelRepo = getIt<ILevelRepository>();
-  final IProgressRepository _progressRepo = getIt<IProgressRepository>();
+  final LoadLevelsCatalogUseCase _loadCatalog =
+      getIt<LoadLevelsCatalogUseCase>();
   final SignOutUseCase _signOut = getIt<SignOutUseCase>();
 
-  late Future<_LevelsData> _dataFuture;
+  late Future<LevelsCatalog> _catalogFuture;
 
   @override
   void initState() {
     super.initState();
-    _dataFuture = _load();
-  }
-
-  Future<_LevelsData> _load() async {
-    final levelsFuture = _levelRepo.fetchLevels();
-    final starsFuture = _progressRepo.fetchStarsByLevel().catchError(
-      (Object _) => <String, int>{},
-    );
-    return _LevelsData(await levelsFuture, await starsFuture);
+    _catalogFuture = _loadCatalog();
   }
 
   void _reload() {
     setState(() {
-      _dataFuture = _load();
+      _catalogFuture = _loadCatalog();
     });
   }
 
@@ -71,8 +57,8 @@ class _LevelsScreenState extends State<LevelsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<_LevelsData>(
-        future: _dataFuture,
+      body: FutureBuilder<LevelsCatalog>(
+        future: _catalogFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -87,9 +73,9 @@ class _LevelsScreenState extends State<LevelsScreen> {
             );
           }
 
-          final data = snapshot.data;
-          final levels = data?.levels ?? <Level>[];
-          final starsByLevel = data?.starsByLevel ?? <String, int>{};
+          final catalog = snapshot.data;
+          final levels = catalog?.levels ?? <Level>[];
+          final starsByLevel = catalog?.starsByLevel ?? <String, int>{};
 
           if (levels.isEmpty) {
             return const Center(child: Text('No levels published yet.'));
