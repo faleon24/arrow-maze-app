@@ -39,6 +39,9 @@ class _GameScreenState extends State<GameScreen> {
   final SubmitLevelResultUseCase _submitResult =
       getIt<SubmitLevelResultUseCase>();
 
+  /// Controller so we can reset zoom back to 1.0 when the player asks.
+  final TransformationController _zoomController = TransformationController();
+
   Position? _blockedFlash;
   Timer? _flashTimer;
   String? _saveError;
@@ -52,6 +55,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     _flashTimer?.cancel();
+    _zoomController.dispose();
     super.dispose();
   }
 
@@ -64,9 +68,14 @@ class _GameScreenState extends State<GameScreen> {
     );
     _blockedFlash = null;
     _saveError = null;
+    _zoomController.value = Matrix4.identity();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _session.isCleared) _submitAndShowWin();
     });
+  }
+
+  void _resetZoom() {
+    _zoomController.value = Matrix4.identity();
   }
 
   void _onCellTapped(Position position) {
@@ -171,6 +180,13 @@ class _GameScreenState extends State<GameScreen> {
         title: Text(
           'Level ${widget.level.index + 1} - ${widget.level.difficulty}',
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.zoom_out_map),
+            tooltip: 'Reset zoom',
+            onPressed: _resetZoom,
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -182,42 +198,55 @@ class _GameScreenState extends State<GameScreen> {
               child: Center(
                 child: AspectRatio(
                   aspectRatio: board.cols / board.rows,
-                  child: Stack(
-                    children: [
-                      GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: board.cols,
-                        ),
-                        itemCount: board.rows * board.cols,
-                        itemBuilder: (context, i) {
-                          final row = i ~/ board.cols;
-                          final col = i % board.cols;
-                          final position = Position(row, col);
-                          final arrow = board.arrowAt(position);
-                          return GestureDetector(
-                            onTap: arrow != null
-                                ? () => _onCellTapped(position)
-                                : null,
-                            child: CellWidget(
-                              isWall: board.isWall(position),
-                              collectible: board.collectibleAt(position),
-                              highlight: _blockedFlash == position
-                                  ? Colors.red.shade400
+                  // InteractiveViewer wraps the board so pinch-to-zoom
+                  // and two-finger pan work. Single-finger taps still
+                  // reach the underlying GestureDetectors because
+                  // InteractiveViewer forwards them, transforming
+                  // coordinates back to the un-zoomed child space.
+                  child: InteractiveViewer(
+                    transformationController: _zoomController,
+                    minScale: 1.0,
+                    maxScale: 3.5,
+                    panEnabled: true,
+                    scaleEnabled: true,
+                    clipBehavior: Clip.hardEdge,
+                    child: Stack(
+                      children: [
+                        GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: board.cols,
+                          ),
+                          itemCount: board.rows * board.cols,
+                          itemBuilder: (context, i) {
+                            final row = i ~/ board.cols;
+                            final col = i % board.cols;
+                            final position = Position(row, col);
+                            final arrow = board.arrowAt(position);
+                            return GestureDetector(
+                              onTap: arrow != null
+                                  ? () => _onCellTapped(position)
                                   : null,
+                              child: CellWidget(
+                                isWall: board.isWall(position),
+                                collectible: board.collectibleAt(position),
+                                highlight: _blockedFlash == position
+                                    ? Colors.red.shade400
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: BoardPainter(board: board),
                             ),
-                          );
-                        },
-                      ),
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: BoardPainter(board: board),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
