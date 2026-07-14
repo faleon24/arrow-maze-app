@@ -78,10 +78,10 @@ Future<void> setupDI() async {
     () => ProgressHttpAdapter(getIt<IAuthTokenStorage>()),
   );
   getIt.registerLazySingleton<IHapticsService>(
-    () => const FlutterHapticsAdapter(),
+    () => FlutterHapticsAdapter(),
   );
   getIt.registerLazySingleton<IAudioService>(
-    () => const SystemSoundsAudioAdapter(),
+    () => SystemSoundsAudioAdapter(),
   );
   getIt.registerLazySingleton<IWalletService>(
     () => const SharedPrefsWalletAdapter(),
