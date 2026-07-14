@@ -20,6 +20,7 @@ import '../../domain/models/power_up_items.dart';
 import '../../domain/ports/inventory_service.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
 import '../auth_guard.dart';
+import 'leaderboard_screen.dart';
 import '../widgets/cell_widget.dart';
 import '../widgets/board_painter.dart';
 
@@ -417,6 +418,15 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.emoji_events_outlined),
+            tooltip: 'Leaderboard',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => LeaderboardScreen(level: widget.level),
+              ),
             ),
           ),
           IconButton(
