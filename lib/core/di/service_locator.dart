@@ -5,30 +5,35 @@ import '../../application/usecases/auth/restore_session_usecase.dart';
 import '../../application/usecases/auth/sign_in_usecase.dart';
 import '../../application/usecases/auth/sign_out_usecase.dart';
 import '../../application/usecases/game/game_feedback_usecase.dart';
+import '../../application/usecases/game/reveal_hint_usecase.dart';
+import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/level/get_levels_usecase.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../application/usecases/progress/get_stars_by_level_usecase.dart';
 import '../../application/usecases/progress/submit_level_result_usecase.dart';
+import '../../application/usecases/wallet/award_coins_for_level_usecase.dart';
+import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
 import '../../domain/ports/audio_service.dart';
 import '../../domain/ports/auth_repository.dart';
 import '../../domain/ports/auth_token_storage.dart';
 import '../../domain/ports/haptics_service.dart';
+import '../../domain/ports/inventory_service.dart';
 import '../../domain/ports/level_repository.dart';
 import '../../domain/ports/progress_repository.dart';
+import '../../domain/ports/wallet_service.dart';
+import '../../domain/services/arrow_ray_calculator.dart';
 import '../../infrastructure/adapters/http/auth_http_adapter.dart';
 import '../../infrastructure/adapters/http/level_http_adapter.dart';
 import '../../infrastructure/adapters/http/progress_http_adapter.dart';
 import '../../infrastructure/adapters/local/dev_level_adapter.dart';
+import '../../infrastructure/adapters/local/shared_prefs_inventory_adapter.dart';
 import '../../infrastructure/adapters/local/shared_prefs_token_storage.dart';
+import '../../infrastructure/adapters/local/shared_prefs_wallet_adapter.dart';
 import '../../infrastructure/adapters/platform/flutter_haptics_adapter.dart';
 import '../../infrastructure/adapters/platform/system_sounds_audio_adapter.dart';
 
-/// getIt — the app's single service locator instance.
 final getIt = GetIt.instance;
 
-/// setupDI — the composition root. Registers every port with its
-/// concrete adapter, then every application use case with its port
-/// dependencies. Called once at app start from main().
 Future<void> setupDI() async {
   // === Infrastructure (adapters bound to ports) ===
   getIt.registerLazySingleton<IAuthTokenStorage>(
@@ -56,6 +61,17 @@ Future<void> setupDI() async {
   );
   getIt.registerLazySingleton<IAudioService>(
     () => const SystemSoundsAudioAdapter(),
+  );
+  getIt.registerLazySingleton<IWalletService>(
+    () => const SharedPrefsWalletAdapter(),
+  );
+  getIt.registerLazySingleton<IInventoryService>(
+    () => const SharedPrefsInventoryAdapter(),
+  );
+
+  // === Domain services ===
+  getIt.registerLazySingleton<ArrowRayCalculator>(
+    () => const ArrowRayCalculator(),
   );
 
   // === Application use cases: auth ===
@@ -101,5 +117,22 @@ Future<void> setupDI() async {
       getIt<IHapticsService>(),
       getIt<IAudioService>(),
     ),
+  );
+  getIt.registerFactory(
+    () => RevealHintUseCase(getIt<IInventoryService>()),
+  );
+  getIt.registerFactory(
+    () => UseGridHighlightUseCase(
+      getIt<IInventoryService>(),
+      getIt<ArrowRayCalculator>(),
+    ),
+  );
+
+  // === Application use cases: wallet ===
+  getIt.registerFactory(
+    () => GetWalletBalanceUseCase(getIt<IWalletService>()),
+  );
+  getIt.registerFactory(
+    () => AwardCoinsForLevelUseCase(getIt<IWalletService>()),
   );
 }
