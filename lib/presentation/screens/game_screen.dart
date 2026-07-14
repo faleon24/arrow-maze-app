@@ -476,6 +476,22 @@ class _GameScreenState extends State<GameScreen> {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              children: [
+                const Icon(Icons.star, color: Colors.yellow, size: 20),
+                const SizedBox(width: 4),
+                Text(
+                  '${_session.collectedPositions.length}/${_session.collectedPositions.length + _session.board.collectibles.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.emoji_events_outlined),
             tooltip: 'Leaderboard',
