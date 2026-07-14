@@ -9,6 +9,9 @@ import '../../application/usecases/game/reveal_hint_usecase.dart';
 import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/level/generate_level_usecase.dart';
 import '../../application/usecases/level/get_levels_usecase.dart';
+import '../../application/usecases/leaderboard/get_leaderboard_usecase.dart';
+import '../../domain/ports/leaderboard_repository.dart';
+import '../../infrastructure/adapters/http/leaderboard_http_adapter.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../application/usecases/lives/consume_life_usecase.dart';
 import '../../application/usecases/lives/get_lives_usecase.dart';
@@ -87,6 +90,9 @@ Future<void> setupDI() async {
   );
   getIt.registerLazySingleton<IShopRepository>(
     () => const ShopHttpAdapter(),
+  );
+  getIt.registerLazySingleton<ILeaderboardRepository>(
+    () => const LeaderboardHttpAdapter(),
   );
 
   // === Domain services ===
@@ -183,5 +189,10 @@ Future<void> setupDI() async {
       getIt<IInventoryService>(),
       getIt<ILivesService>(),
     ),
+  );
+
+  // === Application use cases: leaderboard ===
+  getIt.registerFactory(
+    () => GetLeaderboardUseCase(getIt<ILeaderboardRepository>()),
   );
 }
