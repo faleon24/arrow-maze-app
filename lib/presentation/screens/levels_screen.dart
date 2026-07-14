@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/usecases/auth/sign_out_usecase.dart';
 import '../../application/usecases/level/generate_level_usecase.dart';
-import '../../application/usecases/music/toggle_music_usecase.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../application/usecases/lives/get_lives_usecase.dart';
 import '../../application/usecases/lives/purchase_life_usecase.dart';
+import '../../application/usecases/music/toggle_music_usecase.dart';
 import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/level.dart';
@@ -31,12 +31,12 @@ class _LevelsScreenState extends State<LevelsScreen> {
       getIt<GetWalletBalanceUseCase>();
   final GenerateLevelUseCase _generateLevel = getIt<GenerateLevelUseCase>();
   final ToggleMusicUseCase _toggleMusic = getIt<ToggleMusicUseCase>();
-  bool _musicMuted = false;
 
   late Future<LevelsCatalog> _catalogFuture;
   LivesState? _lives;
   int _coins = 0;
   bool _generating = false;
+  bool _musicMuted = false;
 
   @override
   void initState() {
@@ -78,6 +78,22 @@ class _LevelsScreenState extends State<LevelsScreen> {
     await _refreshHeader();
   }
 
+  Future<void> _handleToggleMusic() async {
+    final newMuted = await _toggleMusic();
+    if (!mounted) return;
+    setState(() => _musicMuted = newMuted);
+  }
+
+  /// Level N is unlocked iff N == 0 (always accessible) or the player
+  /// earned enough stars in the previous level to satisfy that level's
+  /// unlockThreshold. Mirrors the backend's DifficultyProfile rule.
+  bool _isUnlocked(int i, List<Level> levels, Map<String, int> starsByLevel) {
+    if (i == 0) return true;
+    final prev = levels[i - 1];
+    final prevStars = starsByLevel[prev.id] ?? 0;
+    return prevStars >= prev.unlockThreshold;
+  }
+
   void _openLevel(
     BuildContext context,
     Level level,
@@ -105,7 +121,6 @@ class _LevelsScreenState extends State<LevelsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const ShopScreen()),
     );
-    // Coins / lives may have changed via purchases; refresh header.
     await _refreshHeader();
   }
 
@@ -176,12 +191,6 @@ class _LevelsScreenState extends State<LevelsScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-  }
-
-  Future<void> _handleToggleMusic() async {
-    final newMuted = await _toggleMusic();
-    if (!mounted) return;
-    setState(() => _musicMuted = newMuted);
   }
 
   @override
@@ -278,19 +287,46 @@ class _LevelsScreenState extends State<LevelsScreen> {
             itemBuilder: (context, i) {
               final level = levels[i];
               final earned = starsByLevel[level.id];
+              final unlocked = _isUnlocked(i, levels, starsByLevel);
 
               return ListTile(
-                leading: CircleAvatar(child: Text('${level.index + 1}')),
-                title: Text('Level ${level.index + 1}'),
+                leading: unlocked
+                    ? CircleAvatar(child: Text('${level.index + 1}'))
+                    : const CircleAvatar(
+                        backgroundColor: Colors.grey,
+                        child: Icon(Icons.lock, color: Colors.white, size: 18),
+                      ),
+                title: Text(
+                  'Level ${level.index + 1}',
+                  style: TextStyle(
+                    color: unlocked ? null : Colors.grey,
+                  ),
+                ),
                 subtitle: Row(
                   children: [
-                    Text(level.difficulty),
+                    Text(
+                      level.difficulty,
+                      style: TextStyle(
+                        color: unlocked ? null : Colors.grey,
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     _StarRow(earned: earned),
                   ],
                 ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _openLevel(context, level, levels, i),
+                trailing: Icon(
+                  unlocked ? Icons.chevron_right : Icons.lock_outline,
+                  color: unlocked ? null : Colors.grey,
+                ),
+                onTap: unlocked
+                    ? () => _openLevel(context, level, levels, i)
+                    : () {
+                        final prev = levels[i - 1];
+                        _showSnack(
+                          'Earn ${prev.unlockThreshold} star(s) on '
+                          'Level ${prev.index + 1} to unlock this one.',
+                        );
+                      },
               );
             },
           );
