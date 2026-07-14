@@ -7,6 +7,16 @@ class _FakeHaptics implements IHapticsService {
   int lightTapCount = 0;
   int heavyTapCount = 0;
   int successCount = 0;
+  bool _muted = false;
+
+  @override
+  bool get isMuted => _muted;
+  @override
+  Future<bool> readMuted() async => _muted;
+  @override
+  Future<void> setMuted(bool muted) async {
+    _muted = muted;
+  }
 
   @override
   Future<void> lightTap() async => lightTapCount++;
@@ -22,6 +32,16 @@ class _FakeAudio implements IAudioService {
   int activatedCount = 0;
   int blockedCount = 0;
   int clearedCount = 0;
+  bool _muted = false;
+
+  @override
+  bool get isMuted => _muted;
+  @override
+  Future<bool> readMuted() async => _muted;
+  @override
+  Future<void> setMuted(bool muted) async {
+    _muted = muted;
+  }
 
   @override
   Future<void> playArrowActivated() async => activatedCount++;
@@ -37,15 +57,12 @@ void main() {
   group('GameFeedbackUseCase', () {
     test('should_fire_light_haptic_and_activated_sound_on_arrow_activated',
         () async {
-      // Arrange
       final haptics = _FakeHaptics();
       final audio = _FakeAudio();
       final useCase = GameFeedbackUseCase(haptics, audio);
 
-      // Act
       await useCase.arrowActivated();
 
-      // Assert
       expect(haptics.lightTapCount, 1);
       expect(audio.activatedCount, 1);
       expect(haptics.heavyTapCount, 0);

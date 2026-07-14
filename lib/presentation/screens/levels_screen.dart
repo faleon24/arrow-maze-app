@@ -5,13 +5,13 @@ import '../../application/usecases/level/generate_level_usecase.dart';
 import '../../application/usecases/level/load_levels_catalog_usecase.dart';
 import '../../application/usecases/lives/get_lives_usecase.dart';
 import '../../application/usecases/lives/purchase_life_usecase.dart';
-import '../../application/usecases/music/toggle_music_usecase.dart';
 import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/level.dart';
 import '../../domain/models/lives_state.dart';
 import 'game_screen.dart';
 import 'login_screen.dart';
+import 'settings_screen.dart';
 import 'shop_screen.dart';
 
 class LevelsScreen extends StatefulWidget {
@@ -30,20 +30,17 @@ class _LevelsScreenState extends State<LevelsScreen> {
   final GetWalletBalanceUseCase _getBalance =
       getIt<GetWalletBalanceUseCase>();
   final GenerateLevelUseCase _generateLevel = getIt<GenerateLevelUseCase>();
-  final ToggleMusicUseCase _toggleMusic = getIt<ToggleMusicUseCase>();
 
   late Future<LevelsCatalog> _catalogFuture;
   LivesState? _lives;
   int _coins = 0;
   bool _generating = false;
-  bool _musicMuted = false;
 
   @override
   void initState() {
     super.initState();
     _catalogFuture = _loadCatalog();
     _refreshHeader();
-    _musicMuted = _toggleMusic.isMuted;
   }
 
   Future<void> _refreshHeader() async {
@@ -78,15 +75,6 @@ class _LevelsScreenState extends State<LevelsScreen> {
     await _refreshHeader();
   }
 
-  Future<void> _handleToggleMusic() async {
-    final newMuted = await _toggleMusic();
-    if (!mounted) return;
-    setState(() => _musicMuted = newMuted);
-  }
-
-  /// Level N is unlocked iff N == 0 (always accessible) or the player
-  /// earned enough stars in the previous level to satisfy that level's
-  /// unlockThreshold. Mirrors the backend's DifficultyProfile rule.
   bool _isUnlocked(int i, List<Level> levels, Map<String, int> starsByLevel) {
     if (i == 0) return true;
     final prev = levels[i - 1];
@@ -122,6 +110,12 @@ class _LevelsScreenState extends State<LevelsScreen> {
       MaterialPageRoute(builder: (_) => const ShopScreen()),
     );
     await _refreshHeader();
+  }
+
+  Future<void> _openSettings(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
   }
 
   void _openGenerateSheet() {
@@ -224,11 +218,9 @@ class _LevelsScreenState extends State<LevelsScreen> {
             onPressed: () => _openShop(context),
           ),
           IconButton(
-            icon: Icon(
-              _musicMuted ? Icons.music_off : Icons.music_note,
-            ),
-            tooltip: _musicMuted ? 'Unmute music' : 'Mute music',
-            onPressed: _handleToggleMusic,
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () => _openSettings(context),
           ),
           IconButton(
             icon: const Icon(Icons.logout),

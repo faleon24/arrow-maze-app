@@ -14,6 +14,9 @@ class _FakeMusicService implements IMusicService {
   bool get isMuted => _muted;
 
   @override
+  Future<bool> readMuted() async => _muted;
+
+  @override
   Future<void> playLoop(String assetPath) async {
     playCalls++;
   }

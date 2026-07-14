@@ -1,17 +1,21 @@
 /// IHapticsService — abstract contract for tactile feedback.
 ///
 /// Concrete adapters map these semantic events to platform vibration
-/// APIs (Flutter's HapticFeedback on iOS/Android). Application-level
-/// code fires these events; the domain and application layers stay
-/// ignorant of the vibration mechanism.
+/// APIs. Mute state persists across launches so the player's
+/// preference survives app restarts.
 abstract class IHapticsService {
-  /// A soft, quick tap — used when the player activates an arrow
-  /// successfully.
   Future<void> lightTap();
-
-  /// A firm, blunt tap — used when the player taps a blocked arrow.
   Future<void> heavyTap();
-
-  /// A distinctive success pulse — used when a level is cleared.
   Future<void> success();
+
+  /// Load and return the persisted mute preference.
+  Future<bool> readMuted();
+
+  /// Persist and apply the mute preference. Muted adapters no-op on
+  /// every tap*/success call.
+  Future<void> setMuted(bool muted);
+
+  /// Cached mute state; may be stale until [readMuted] has been
+  /// called at least once.
+  bool get isMuted;
 }

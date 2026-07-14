@@ -8,8 +8,7 @@ import '../../../domain/ports/music_service.dart';
 /// persists the mute preference across app launches via
 /// shared_preferences.
 ///
-/// Stateful (holds an AudioPlayer instance + the current asset +
-/// mute flag), so DI registers this as a singleton.
+/// Stateful (AudioPlayer + current asset + mute flag), singleton in DI.
 class AudioPlayersMusicAdapter implements IMusicService {
   static const String _mutedKey = 'music_muted';
   static const double _volume = 0.35;
@@ -25,24 +24,30 @@ class AudioPlayersMusicAdapter implements IMusicService {
   @override
   bool get isMuted => _muted;
 
+  Future<void> _ensureMutedLoaded() async {
+    if (_mutedLoaded) return;
+    final prefs = await SharedPreferences.getInstance();
+    _muted = prefs.getBool(_mutedKey) ?? false;
+    _mutedLoaded = true;
+  }
+
+  @override
+  Future<bool> readMuted() async {
+    await _ensureMutedLoaded();
+    return _muted;
+  }
+
   @override
   Future<void> playLoop(String assetPath) async {
     _currentAsset = assetPath;
-    if (!_mutedLoaded) {
-      final prefs = await SharedPreferences.getInstance();
-      _muted = prefs.getBool(_mutedKey) ?? false;
-      _mutedLoaded = true;
-    }
+    await _ensureMutedLoaded();
     if (_muted || _isPlaying) return;
     try {
       await _player.setReleaseMode(ReleaseMode.loop);
       await _player.setVolume(_volume);
       await _player.play(AssetSource(assetPath));
       _isPlaying = true;
-    } catch (_) {
-      // Asset missing or platform lacking audio — silently skip so
-      // the game still runs.
-    }
+    } catch (_) {}
   }
 
   @override
