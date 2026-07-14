@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/usecases/game/game_feedback_usecase.dart';
 import '../../application/usecases/progress/submit_level_result_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/game_session.dart';
@@ -38,8 +39,8 @@ class _GameScreenState extends State<GameScreen> {
   late GameSession _session;
   final SubmitLevelResultUseCase _submitResult =
       getIt<SubmitLevelResultUseCase>();
+  final GameFeedbackUseCase _feedback = getIt<GameFeedbackUseCase>();
 
-  /// Controller so we can reset zoom back to 1.0 when the player asks.
   final TransformationController _zoomController = TransformationController();
 
   Position? _blockedFlash;
@@ -81,6 +82,14 @@ class _GameScreenState extends State<GameScreen> {
   void _onCellTapped(Position position) {
     if (_session.isCleared || _session.isFailed) return;
     final outcome = _session.tap(position);
+
+    // Fire-and-forget feedback so it never blocks the UI.
+    if (outcome == TapOutcome.blocked) {
+      unawaited(_feedback.arrowBlocked());
+    } else {
+      unawaited(_feedback.arrowActivated());
+    }
+
     setState(() {
       _blockedFlash = outcome == TapOutcome.blocked ? position : null;
     });
@@ -91,8 +100,10 @@ class _GameScreenState extends State<GameScreen> {
       });
     }
     if (_session.isCleared) {
+      unawaited(_feedback.levelCleared());
       _submitAndShowWin();
     } else if (_session.isFailed) {
+      unawaited(_feedback.levelFailed());
       _showEndDialog(won: false);
     }
   }
@@ -198,11 +209,6 @@ class _GameScreenState extends State<GameScreen> {
               child: Center(
                 child: AspectRatio(
                   aspectRatio: board.cols / board.rows,
-                  // InteractiveViewer wraps the board so pinch-to-zoom
-                  // and two-finger pan work. Single-finger taps still
-                  // reach the underlying GestureDetectors because
-                  // InteractiveViewer forwards them, transforming
-                  // coordinates back to the un-zoomed child space.
                   child: InteractiveViewer(
                     transformationController: _zoomController,
                     minScale: 1.0,
