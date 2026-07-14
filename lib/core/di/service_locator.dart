@@ -4,6 +4,10 @@ import '../../application/usecases/auth/register_usecase.dart';
 import '../../application/usecases/auth/restore_session_usecase.dart';
 import '../../application/usecases/auth/sign_in_usecase.dart';
 import '../../application/usecases/auth/sign_out_usecase.dart';
+import '../../application/usecases/level/get_levels_usecase.dart';
+import '../../application/usecases/level/load_levels_catalog_usecase.dart';
+import '../../application/usecases/progress/get_stars_by_level_usecase.dart';
+import '../../application/usecases/progress/submit_level_result_usecase.dart';
 import '../../domain/ports/auth_repository.dart';
 import '../../domain/ports/auth_token_storage.dart';
 import '../../domain/ports/level_repository.dart';
@@ -50,7 +54,7 @@ Future<void> setupDI() async {
     () => ProgressHttpAdapter(getIt<IAuthTokenStorage>()),
   );
 
-  // === Application use cases ===
+  // === Application use cases: auth ===
   getIt.registerFactory(
     () => SignInUseCase(
       getIt<IAuthRepository>(),
@@ -68,5 +72,22 @@ Future<void> setupDI() async {
   );
   getIt.registerFactory(
     () => RestoreSessionUseCase(getIt<IAuthTokenStorage>()),
+  );
+
+  // === Application use cases: level + progress ===
+  getIt.registerFactory(
+    () => GetLevelsUseCase(getIt<ILevelRepository>()),
+  );
+  getIt.registerFactory(
+    () => GetStarsByLevelUseCase(getIt<IProgressRepository>()),
+  );
+  getIt.registerFactory(
+    () => SubmitLevelResultUseCase(getIt<IProgressRepository>()),
+  );
+  getIt.registerFactory(
+    () => LoadLevelsCatalogUseCase(
+      getIt<GetLevelsUseCase>(),
+      getIt<GetStarsByLevelUseCase>(),
+    ),
   );
 }
