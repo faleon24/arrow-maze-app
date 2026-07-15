@@ -26,6 +26,7 @@ class ArrowMazeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner:false,
       navigatorKey: AuthGuard.navigatorKey,
       title: 'Arrow Maze',
       theme: ThemeData(
