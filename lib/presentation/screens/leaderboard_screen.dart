@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-
 import '../../application/usecases/leaderboard/get_leaderboard_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/leaderboard_entry.dart';
 import '../../domain/models/level.dart';
+import '../../l10n/app_localizations.dart';
 
 /// LeaderboardScreen — top runs for a specific level.
 ///
@@ -11,9 +11,7 @@ import '../../domain/models/level.dart';
 /// star count + wall-clock time. Public data, no auth required.
 class LeaderboardScreen extends StatefulWidget {
   final Level level;
-
   const LeaderboardScreen({super.key, required this.level});
-
   @override
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
@@ -21,7 +19,6 @@ class LeaderboardScreen extends StatefulWidget {
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   final GetLeaderboardUseCase _getLeaderboard =
       getIt<GetLeaderboardUseCase>();
-
   late Future<List<LeaderboardEntry>> _entriesFuture;
 
   @override
@@ -67,11 +64,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Leaderboard — Level ${widget.level.index + 1}',
-        ),
+        title: Text(l10n.leaderboardTitle(widget.level.index + 1)),
       ),
       body: FutureBuilder<List<LeaderboardEntry>>(
         future: _entriesFuture,
@@ -83,17 +79,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text('Error loading leaderboard:\n${snapshot.error}'),
+                child: Text(l10n.errorLoadingLeaderboard(snapshot.error!)),
               ),
             );
           }
           final entries = snapshot.data ?? const <LeaderboardEntry>[];
           if (entries.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Text(
-                  'No runs recorded yet. Be the first to top the board!',
+                  l10n.noRunsRecorded,
                   textAlign: TextAlign.center,
                 ),
               ),
