@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 
 import '../../application/usecases/auth/sign_out_usecase.dart';
 import '../../application/usecases/level/generate_level_usecase.dart';
@@ -65,13 +66,16 @@ class _LevelsScreenState extends State<LevelsScreen> {
     if (!mounted) return;
     if (!ok) {
       final lives = _lives;
+      final l10n = AppLocalizations.of(context);
       final msg = (lives != null && lives.isFull)
-          ? 'Already at max lives'
-          : 'Not enough coins (need ${PurchaseLifeUseCase.cost})';
+          ? l10n.alreadyMaxLives
+          : l10n.notEnoughCoins(PurchaseLifeUseCase.cost);
       _showSnack(msg);
       return;
     }
-    _showSnack('+1 life (-${PurchaseLifeUseCase.cost} coins)');
+    _showSnack(
+      AppLocalizations.of(context).oneLifeBought(PurchaseLifeUseCase.cost),
+    );
     await _refreshHeader();
   }
 
@@ -90,7 +94,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
   ) async {
     final lives = _lives;
     if (lives != null && lives.isEmpty) {
-      _showSnack('No lives left. Buy one with coins to play.');
+      _showSnack(AppLocalizations.of(context).noLivesLeft);
       return;
     }
     await Navigator.of(context).push(
@@ -119,27 +123,28 @@ class _LevelsScreenState extends State<LevelsScreen> {
   }
 
   void _openGenerateSheet() {
+    final l10n = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
-                'Generate a new level',
-                style: TextStyle(
+                l10n.generateNewLevelTitle,
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'Pick a difficulty and the server crafts a solvable puzzle.',
-                style: TextStyle(color: Colors.grey),
+                l10n.generateNewLevelBody,
+                style: const TextStyle(color: Colors.grey),
               ),
             ),
             const SizedBox(height: 8),
@@ -166,12 +171,15 @@ class _LevelsScreenState extends State<LevelsScreen> {
       final level = await _generateLevel(difficulty: difficulty);
       if (!mounted) return;
       _showSnack(
-        'Generated ${level.difficulty} level #${level.index + 1}',
+        AppLocalizations.of(context).generatedLevel(
+          level.difficulty,
+          level.index + 1,
+        ),
       );
       _reload();
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Generation failed: $e');
+      _showSnack(AppLocalizations.of(context).generationFailed(e));
     } finally {
       if (mounted) setState(() => _generating = false);
     }
@@ -191,10 +199,11 @@ class _LevelsScreenState extends State<LevelsScreen> {
   Widget build(BuildContext context) {
     final lives = _lives;
     final canBuyLife = lives != null && !lives.isFull;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Arrow Maze — Levels'),
+        title: Text(l10n.levelsTitle),
         actions: [
           _HeaderChip(
             icon: Icons.favorite,
@@ -204,7 +213,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
           if (canBuyLife)
             IconButton(
               icon: const Icon(Icons.add_circle_outline),
-              tooltip: 'Buy 1 life (${PurchaseLifeUseCase.cost} coins)',
+              tooltip: l10n.buyOneLifeTooltip(PurchaseLifeUseCase.cost),
               onPressed: _handleBuyLife,
             ),
           _HeaderChip(
@@ -214,17 +223,17 @@ class _LevelsScreenState extends State<LevelsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.shopping_bag_outlined),
-            tooltip: 'Shop',
+            tooltip: l10n.shop,
             onPressed: () => _openShop(context),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
-            tooltip: 'Settings',
+            tooltip: l10n.settings,
             onPressed: () => _openSettings(context),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
+            tooltip: l10n.signOut,
             onPressed: () async {
               await _signOut();
               if (!context.mounted) return;
@@ -248,7 +257,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
                 ),
               )
             : const Icon(Icons.auto_awesome),
-        label: Text(_generating ? 'Generating...' : 'Generate level'),
+        label: Text(_generating ? l10n.generating : l10n.generateLevel),
       ),
       body: FutureBuilder<LevelsCatalog>(
         future: _catalogFuture,
@@ -261,7 +270,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text('Error loading levels:\n${snapshot.error}'),
+                child: Text(l10n.errorLoadingLevels(snapshot.error!)),
               ),
             );
           }
@@ -271,7 +280,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
           final starsByLevel = catalog?.starsByLevel ?? <String, int>{};
 
           if (levels.isEmpty) {
-            return const Center(child: Text('No levels published yet.'));
+            return Center(child: Text(l10n.noLevelsPublished));
           }
 
           return ListView.builder(
@@ -289,7 +298,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
                         child: Icon(Icons.lock, color: Colors.white, size: 18),
                       ),
                 title: Text(
-                  'Level ${level.index + 1}',
+                  l10n.levelN(level.index + 1),
                   style: TextStyle(
                     color: unlocked ? null : Colors.grey,
                   ),
@@ -315,8 +324,10 @@ class _LevelsScreenState extends State<LevelsScreen> {
                     : () {
                         final prev = levels[i - 1];
                         _showSnack(
-                          'Earn ${prev.unlockThreshold} star(s) on '
-                          'Level ${prev.index + 1} to unlock this one.',
+                          l10n.unlockHint(
+                            prev.unlockThreshold,
+                            prev.index + 1,
+                          ),
                         );
                       },
               );

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 
 import '../../application/usecases/game/game_feedback_usecase.dart';
 import '../../application/usecases/game/reveal_hint_usecase.dart';
@@ -216,8 +217,8 @@ class _GameScreenState extends State<GameScreen> {
     if (hintedId == null) {
       _showSnackBar(
         activatable.isEmpty
-            ? 'No activatable arrows right now'
-            : 'Out of hints',
+            ? AppLocalizations.of(context).noActivatableArrows
+            : AppLocalizations.of(context).outOfHints,
       );
       return;
     }
@@ -236,7 +237,7 @@ class _GameScreenState extends State<GameScreen> {
   void _toggleGridMode() {
     if (_isPaused) return;
     if (_gridCount <= 0) {
-      _showSnackBar('Out of grid highlights');
+      _showSnackBar(AppLocalizations.of(context).outOfGridHighlights);
       return;
     }
     setState(() {
@@ -249,7 +250,7 @@ class _GameScreenState extends State<GameScreen> {
     final ray = await _useGrid(board: _session.board, arrowId: arrowId);
     if (!mounted) return;
     if (ray == null) {
-      _showSnackBar('Out of grid highlights');
+      _showSnackBar(AppLocalizations.of(context).outOfGridHighlights);
       setState(() => _gridMode = false);
       return;
     }
@@ -366,21 +367,23 @@ class _GameScreenState extends State<GameScreen> {
   void _showEndDialog({required bool won}) {
     final stars = _serverStars ?? _session.starsEarned;
     final timeStr = _formatElapsed(_elapsedMs());
+    final l10n = AppLocalizations.of(context);
+    final starsStr = '*' * stars;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => PopScope(
         canPop: false,
         child: AlertDialog(
-          title: Text(won ? 'Level cleared!' : 'Out of moves'),
+          title: Text(won ? l10n.levelCleared : l10n.outOfMoves),
           content: Text(
             won
-                ? 'You cleared the board in ${_session.movesUsed} moves ($timeStr).\n'
-                      'Stars earned: ${'*' * stars}\n'
-                      'Coins earned: +$_coinsEarnedThisRun (total: $_coinsBalance)\n'
-                      '${_saveError == null ? 'Progress saved.' : 'Could not save: $_saveError'}'
-                : 'The board still has ${_session.arrowsRemaining} arrows.\n'
-                      '-1 life spent.',
+                ? '${l10n.clearedBoardIn(_session.movesUsed, timeStr)}\n'
+                      '${l10n.starsEarned(starsStr)}\n'
+                      '${l10n.coinsEarned(_coinsEarnedThisRun, _coinsBalance)}\n'
+                      '${_saveError == null ? l10n.progressSaved : l10n.couldNotSave(_saveError!)}'
+                : '${l10n.boardStillHas(_session.arrowsRemaining)}\n'
+                      '${l10n.oneLifeSpent}',
           ),
           actions: [
             TextButton(
@@ -388,14 +391,14 @@ class _GameScreenState extends State<GameScreen> {
                 Navigator.of(context).pop();
                 Navigator.of(context).pop();
               },
-              child: const Text('Back to levels'),
+              child: Text(l10n.backToLevels),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 setState(_startSession);
               },
-              child: const Text('Play again'),
+              child: Text(l10n.playAgain),
             ),
             if (won && widget.nextLevel != null)
               FilledButton(
@@ -412,7 +415,7 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                   );
                 },
-                child: const Text('Next level'),
+                child: Text(l10n.nextLevel),
               ),
           ],
         ),
@@ -424,18 +427,19 @@ class _GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     final board = _session.board;
     final lives = _globalLives;
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF07091A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F1330),
         foregroundColor: Colors.white,
         title: Text(
-          'Level ${widget.level.index + 1} - ${widget.level.difficulty}',
+          l10n.gameLevelTitle(widget.level.index + 1, widget.level.difficulty),
         ),
         actions: [
           IconButton(
             icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
-            tooltip: _isPaused ? 'Resume' : 'Pause',
+            tooltip: _isPaused ? l10n.resume : l10n.pause,
             onPressed:
                 (_session.isCleared || _session.isFailed) ? null : _togglePause,
           ),
@@ -489,7 +493,7 @@ class _GameScreenState extends State<GameScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.emoji_events_outlined),
-            tooltip: 'Leaderboard',
+            tooltip: l10n.leaderboard,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => LeaderboardScreen(level: widget.level),
@@ -498,7 +502,7 @@ class _GameScreenState extends State<GameScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.zoom_out_map),
-            tooltip: 'Reset zoom',
+            tooltip: l10n.resetZoom,
             onPressed: _resetZoom,
           ),
         ],
@@ -593,6 +597,7 @@ class _PauseOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       color: Colors.black.withValues(alpha: 0.7),
       child: Column(
@@ -601,9 +606,9 @@ class _PauseOverlay extends StatelessWidget {
           const Icon(Icons.pause_circle_outline,
               color: Colors.white, size: 72),
           const SizedBox(height: 12),
-          const Text(
-            'PAUSED',
-            style: TextStyle(
+          Text(
+            l10n.paused,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 32,
               fontWeight: FontWeight.bold,
@@ -614,7 +619,7 @@ class _PauseOverlay extends StatelessWidget {
           FilledButton.icon(
             onPressed: onResume,
             icon: const Icon(Icons.play_arrow),
-            label: const Text('Resume'),
+            label: Text(l10n.resume),
           ),
         ],
       ),
@@ -639,13 +644,14 @@ class _PowerUpBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         FilledButton.tonalIcon(
           onPressed: hintCount > 0 ? onHint : null,
           icon: const Icon(Icons.lightbulb_outline),
-          label: Text('Hint ($hintCount)'),
+          label: Text(l10n.hintLabel(hintCount)),
         ),
         FilledButton.tonalIcon(
           onPressed: gridCount > 0 ? onGrid : null,
@@ -653,7 +659,7 @@ class _PowerUpBar extends StatelessWidget {
             Icons.grid_on,
             color: gridMode ? Colors.tealAccent : null,
           ),
-          label: Text(gridMode ? 'Tap an arrow' : 'Grid ($gridCount)'),
+          label: Text(gridMode ? l10n.tapAnArrow : l10n.gridLabel(gridCount)),
         ),
       ],
     );
@@ -667,25 +673,26 @@ class _StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       children: [
         Expanded(
           child: _Stat(
-            label: 'Arrows left',
+            label: l10n.statArrowsLeft,
             value: '${session.arrowsRemaining}',
           ),
         ),
         Expanded(
           child: _Stat(
-            label: 'Moves',
+            label: l10n.statMoves,
             value: '${session.movesUsed} / ${session.moveLimit}',
           ),
         ),
         Expanded(
-          child: _Stat(label: 'Time', value: elapsedText),
+          child: _Stat(label: l10n.statTime, value: elapsedText),
         ),
         Expanded(
-          child: _Stat(label: 'Attempts', value: '${session.lives}'),
+          child: _Stat(label: l10n.statAttempts, value: '${session.lives}'),
         ),
       ],
     );

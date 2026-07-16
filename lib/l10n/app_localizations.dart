@@ -83,6 +83,8 @@ class AppLocalizations {
   String get levelsTitle => _es ? 'Arrow Maze — Niveles' : 'Arrow Maze — Levels';
   String get alreadyMaxLives =>
       _es ? 'Ya tienes el máximo de vidas' : 'Already at max lives';
+  String oneLifeBought(Object cost) =>
+      _es ? '+1 vida (-$cost monedas)' : '+1 life (-$cost coins)';
   String notEnoughCoins(Object cost) => _es
       ? 'Monedas insuficientes (necesitas $cost)'
       : 'Not enough coins (need $cost)';
@@ -158,6 +160,7 @@ class AppLocalizations {
   String boardStillHas(Object arrows) => _es
       ? 'Al tablero le quedan $arrows flechas.'
       : 'The board still has $arrows arrows.';
+  String get oneLifeSpent => _es ? '-1 vida gastada.' : '-1 life spent.';
   String get backToLevels => _es ? 'Volver a niveles' : 'Back to levels';
   String get playAgain => _es ? 'Jugar de nuevo' : 'Play again';
   String get nextLevel => _es ? 'Siguiente nivel' : 'Next level';
