@@ -1,4 +1,5 @@
 import 'package:get_it/get_it.dart';
+import '../l10n/locale_controller.dart';
 
 import '../../application/usecases/auth/register_usecase.dart';
 import '../../application/usecases/auth/restore_session_usecase.dart';
@@ -56,6 +57,10 @@ final getIt = GetIt.instance;
 /// concrete adapter, then every application use case with its port
 /// dependencies. Called once at app start from main().
 Future<void> setupDI() async {
+  // Locale controller: load the persisted language before any UI mounts,
+  // so the app opens in the user's saved language.
+  getIt.registerSingleton<LocaleController>(await LocaleController.load());
+
   // === Infrastructure (adapters bound to ports) ===
   getIt.registerLazySingleton<IAuthTokenStorage>(
     () => const SharedPrefsTokenStorage(),
