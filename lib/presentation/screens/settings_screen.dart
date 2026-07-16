@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-
 import '../../core/di/service_locator.dart';
+import '../../core/l10n/locale_controller.dart';
 import '../../domain/ports/audio_service.dart';
 import '../../domain/ports/haptics_service.dart';
 import '../../domain/ports/music_service.dart';
+import '../../l10n/app_localizations.dart';
 
-/// SettingsScreen — one screen to control all three feedback channels
-/// (background music, sound effects, haptics). Loads the persisted
-/// mute state on init via each service's readMuted; toggles persist
-/// immediately via setMuted.
+/// SettingsScreen — one screen to control the three feedback channels
+/// (background music, sound effects, haptics) and the app language.
+/// Feedback mutes persist via each service's setMuted; the language
+/// choice persists via the LocaleController and rebuilds the app
+/// immediately.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -20,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final IMusicService _music = getIt<IMusicService>();
   final IAudioService _audio = getIt<IAudioService>();
   final IHapticsService _haptics = getIt<IHapticsService>();
+  final LocaleController _locale = getIt<LocaleController>();
 
   bool _loaded = false;
   bool _musicMuted = false;
@@ -65,59 +68,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _hapticsMuted = muted);
   }
 
+  Future<void> _setLocale(String code) async {
+    await _locale.setLocale(Locale(code));
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    const sectionStyle = TextStyle(
+      fontWeight: FontWeight.bold,
+      color: Colors.grey,
+    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(l10n.settings)),
       body: _loaded
           ? ListView(
               children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text(
-                    'Feedback',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(l10n.settingsFeedbackSection, style: sectionStyle),
                 ),
                 SwitchListTile(
                   secondary: const Icon(Icons.music_note),
-                  title: const Text('Background music'),
-                  subtitle: const Text('Loops during play'),
+                  title: Text(l10n.backgroundMusic),
+                  subtitle: Text(l10n.backgroundMusicSubtitle),
                   value: !_musicMuted,
                   onChanged: (on) => _setMusic(!on),
                 ),
                 SwitchListTile(
                   secondary: const Icon(Icons.volume_up),
-                  title: const Text('Sound effects'),
-                  subtitle: const Text('Tap and event feedback'),
+                  title: Text(l10n.soundEffects),
+                  subtitle: Text(l10n.soundEffectsSubtitle),
                   value: !_audioMuted,
                   onChanged: (on) => _setAudio(!on),
                 ),
                 SwitchListTile(
                   secondary: const Icon(Icons.vibration),
-                  title: const Text('Haptics'),
-                  subtitle: const Text('Vibration on tap and events'),
+                  title: Text(l10n.haptics),
+                  subtitle: Text(l10n.hapticsSubtitle),
                   value: !_hapticsMuted,
                   onChanged: (on) => _setHaptics(!on),
                 ),
                 const Divider(),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text(
-                    'About',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(l10n.settingsLanguageSection, style: sectionStyle),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: SegmentedButton<String>(
+                    segments: [
+                      ButtonSegment<String>(
+                        value: 'en',
+                        label: Text(l10n.languageEnglish),
+                        icon: const Icon(Icons.language),
+                      ),
+                      ButtonSegment<String>(
+                        value: 'es',
+                        label: Text(l10n.languageSpanish),
+                      ),
+                    ],
+                    selected: {_locale.locale.languageCode},
+                    onSelectionChanged: (selection) =>
+                        _setLocale(selection.first),
                   ),
                 ),
-                const ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text('Arrow Maze'),
-                  subtitle: Text('v1.0.0'),
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(l10n.settingsAboutSection, style: sectionStyle),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: Text(l10n.appTitle),
+                  subtitle: const Text('v1.0.0'),
                 ),
               ],
             )

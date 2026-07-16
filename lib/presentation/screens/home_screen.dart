@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import 'auth_gate.dart';
 import 'settings_screen.dart';
 
@@ -6,7 +7,7 @@ import 'settings_screen.dart';
 /// the assignment asks for). It is the root of MaterialApp, so the app no
 /// longer drops straight into login. From here the player can:
 ///   - Play    -> AuthGate (which routes to login or the level catalog)
-///   - Settings -> SettingsScreen (mute music / audio / haptics)
+///   - Settings -> SettingsScreen (feedback mutes + language)
 ///
 /// Stateless and dependency-free: it only navigates. All session logic
 /// still lives behind AuthGate, so this screen stays a thin menu.
@@ -23,6 +24,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       body: Container(
@@ -47,7 +49,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Arrow Maze',
+                    l10n.appTitle,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.displaySmall?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -56,7 +58,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Escape Puzzle',
+                    l10n.tagline,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
@@ -68,9 +70,9 @@ class HomeScreen extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: () => _push(context, const AuthGate()),
                       icon: const Icon(Icons.play_arrow_rounded),
-                      label: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Text('Play'),
+                      label: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(l10n.play),
                       ),
                     ),
                   ),
@@ -80,9 +82,9 @@ class HomeScreen extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: () => _push(context, const SettingsScreen()),
                       icon: const Icon(Icons.settings_rounded),
-                      label: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Text('Settings'),
+                      label: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(l10n.settings),
                       ),
                     ),
                   ),
