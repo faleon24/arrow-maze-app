@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-
 import '../../application/usecases/shop/buy_shop_item_usecase.dart';
 import '../../application/usecases/shop/list_shop_items_usecase.dart';
 import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/shop_item.dart';
+import '../../l10n/app_localizations.dart';
 
 /// ShopScreen — browse the backend shop catalog and buy items with
 /// the local wallet balance. Purchase applies its effect locally
@@ -12,7 +12,6 @@ import '../../domain/models/shop_item.dart';
 /// audit.
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
-
   @override
   State<ShopScreen> createState() => _ShopScreenState();
 }
@@ -22,7 +21,6 @@ class _ShopScreenState extends State<ShopScreen> {
   final BuyShopItemUseCase _buyItem = getIt<BuyShopItemUseCase>();
   final GetWalletBalanceUseCase _getBalance =
       getIt<GetWalletBalanceUseCase>();
-
   late Future<List<ShopItem>> _itemsFuture;
   int _coins = 0;
   bool _purchasing = false;
@@ -41,32 +39,29 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Future<void> _confirmAndBuy(ShopItem item) async {
+    final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        title: Text('Buy ${item.name}?'),
-        content: Text(
-          'This will spend ${item.costCoins} coins from your wallet.',
-        ),
+        title: Text(l10n.buyItemTitle(item.name)),
+        content: Text(l10n.buyItemBody(item.costCoins)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogCtx).pop(true),
-            child: const Text('Buy'),
+            child: Text(l10n.buy),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-
     setState(() => _purchasing = true);
     final result = await _buyItem(item: item);
     if (!mounted) return;
     setState(() => _purchasing = false);
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(result.message),
@@ -97,9 +92,10 @@ class _ShopScreenState extends State<ShopScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Shop'),
+        title: Text(l10n.shop),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -126,13 +122,13 @@ class _ShopScreenState extends State<ShopScreen> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text('Error loading shop:\n${snapshot.error}'),
+                child: Text(l10n.errorLoadingShop(snapshot.error!)),
               ),
             );
           }
           final items = snapshot.data ?? <ShopItem>[];
           if (items.isEmpty) {
-            return const Center(child: Text('The shop is empty.'));
+            return Center(child: Text(l10n.shopEmpty));
           }
           return ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 8),
