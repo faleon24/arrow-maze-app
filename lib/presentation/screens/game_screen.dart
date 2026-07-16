@@ -1,8 +1,7 @@
 import 'dart:async';
-
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
-
 import '../../application/usecases/game/game_feedback_usecase.dart';
 import '../../application/usecases/game/reveal_hint_usecase.dart';
 import '../../application/usecases/game/use_grid_highlight_usecase.dart';
@@ -13,6 +12,7 @@ import '../../application/usecases/progress/submit_level_result_usecase.dart';
 import '../../application/usecases/wallet/award_coins_for_level_usecase.dart';
 import '../../application/usecases/wallet/get_wallet_balance_usecase.dart';
 import '../../core/di/service_locator.dart';
+import '../../domain/models/arrow_path.dart';
 import '../../domain/models/game_session.dart';
 import '../../domain/models/level.dart';
 import '../../domain/models/lives_state.dart';
@@ -24,31 +24,30 @@ import '../../infrastructure/adapters/http/api_exception.dart';
 import '../auth_guard.dart';
 import '../widgets/cell_widget.dart';
 import '../widgets/board_painter.dart';
+import '../widgets/game_fx.dart';
 import 'leaderboard_screen.dart';
 
 class GameScreen extends StatefulWidget {
   final Level level;
   final List<Level>? catalog;
   final int? indexInCatalog;
-
   const GameScreen({
     super.key,
     required this.level,
     this.catalog,
     this.indexInCatalog,
   });
-
   Level? get nextLevel {
     if (catalog == null || indexInCatalog == null) return null;
     final next = indexInCatalog! + 1;
     return next < catalog!.length ? catalog![next] : null;
   }
-
   @override
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> {
+class _GameScreenState extends State<GameScreen>
+    with TickerProviderStateMixin {
   late GameSession _session;
   final SubmitLevelResultUseCase _submitResult =
       getIt<SubmitLevelResultUseCase>();
@@ -68,15 +67,12 @@ class _GameScreenState extends State<GameScreen> {
   // pass-throughs, not orchestration, so a wrapping use case would
   // add ceremony without value.
   final IMusicService _music = getIt<IMusicService>();
-
   final TransformationController _zoomController = TransformationController();
-
   Position? _blockedFlash;
   Timer? _flashTimer;
   Timer? _powerUpTimer;
   Timer? _uiTicker;
   String? _saveError;
-
   int _coinsBalance = 0;
   int _hintCount = 0;
   int _gridCount = 0;
@@ -86,19 +82,26 @@ class _GameScreenState extends State<GameScreen> {
   bool _gridMode = false;
   Position? _hintedHead;
   List<Position> _gridRay = const <Position>[];
-
   /// Wall-clock start of the current attempt (may shift forward when
   /// pausing, so `elapsed = now - _sessionStartTime` stays correct
   /// regardless of pause history).
   DateTime? _sessionStartTime;
-
   /// When paused, the instant pause happened. Used to freeze the
   /// displayed elapsed time and to advance _sessionStartTime by the
   /// paused duration on resume.
   DateTime? _pausedAt;
   bool get _isPaused => _pausedAt != null;
-
   bool _lifeConsumedThisRun = false;
+
+  // --- Animations ---
+  // _fxController is a repaint clock for the "arrow cleared" effects; it
+  // runs only while effects are on screen. _shakeController fires on a
+  // blocked tap; _celebrationController drives the win confetti.
+  final List<ClearFx> _clearFx = <ClearFx>[];
+  late final AnimationController _fxController;
+  late final AnimationController _shakeController;
+  late final AnimationController _celebrationController;
+  bool _celebrating = false;
 
   @override
   void initState() {
@@ -106,6 +109,22 @@ class _GameScreenState extends State<GameScreen> {
     _startSession();
     _loadHeaderState();
     _startUiTicker();
+    _fxController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..addListener(_pruneClearFx);
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _celebrationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed && mounted) {
+          setState(() => _celebrating = false);
+        }
+      });
   }
 
   @override
@@ -117,6 +136,9 @@ class _GameScreenState extends State<GameScreen> {
     _flashTimer?.cancel();
     _powerUpTimer?.cancel();
     _uiTicker?.cancel();
+    _fxController.dispose();
+    _shakeController.dispose();
+    _celebrationController.dispose();
     _zoomController.dispose();
     // Ensure music is playing again if the player left the game paused.
     _music.resume();
@@ -163,6 +185,7 @@ class _GameScreenState extends State<GameScreen> {
     _coinsEarnedThisRun = 0;
     _serverStars = null;
     _lifeConsumedThisRun = false;
+    _clearFx.clear();
     _sessionStartTime = DateTime.now();
     _pausedAt = null;
     _zoomController.value = Matrix4.identity();
@@ -271,24 +294,25 @@ class _GameScreenState extends State<GameScreen> {
     if (_session.isCleared || _session.isFailed) return;
     final arrow = _session.board.arrowAt(position);
     if (arrow == null) return;
-
     if (_gridMode) {
       unawaited(_consumeGridOn(arrow.id));
       return;
     }
-
     final outcome = _session.tap(position);
-
     setState(() {
       _blockedFlash = outcome == TapOutcome.blocked ? position : null;
       _hintedHead = null;
       _gridRay = const <Position>[];
     });
     if (outcome == TapOutcome.blocked) {
+      _triggerShake();
       _flashTimer?.cancel();
       _flashTimer = Timer(const Duration(milliseconds: 350), () {
         if (mounted) setState(() => _blockedFlash = null);
       });
+    } else {
+      // The tap cleared this arrow: fire its ray-off animation.
+      _emitClearFx(arrow);
     }
     if (_session.isCleared) {
       _submitAndShowWin();
@@ -296,6 +320,66 @@ class _GameScreenState extends State<GameScreen> {
       _handleFailure();
       _showEndDialog(won: false);
     }
+  }
+
+  // --- Animation helpers ---
+
+  void _pruneClearFx() {
+    _clearFx.removeWhere(
+      (f) => DateTime.now().difference(f.start) >= kClearFxDuration,
+    );
+    if (_clearFx.isEmpty && _fxController.isAnimating) {
+      _fxController.stop();
+    }
+  }
+
+  /// Build the fly-off effect for a just-cleared arrow: trace its ray to
+  /// the edge (measuring length + any stars swept up) and queue a ClearFx.
+  void _emitClearFx(ArrowPath arrow) {
+    final head = arrow.head;
+    final step = arrow.direction.apply(Position(0, 0));
+    final dRow = step.row;
+    final dCol = step.col;
+    final rows = _session.board.rows;
+    final cols = _session.board.cols;
+    var r = head.row + dRow;
+    var c = head.col + dCol;
+    var len = 0;
+    final stars = <Position>[];
+    while (r >= 0 && r < rows && c >= 0 && c < cols) {
+      final p = Position(r, c);
+      if (_session.board.collectibleAt(p) != null) stars.add(p);
+      len++;
+      r += dRow;
+      c += dCol;
+    }
+    _clearFx.add(
+      ClearFx(
+        row: head.row,
+        col: head.col,
+        dRow: dRow,
+        dCol: dCol,
+        color: arrow.color.hex,
+        rayLen: len == 0 ? 1 : len,
+        stars: stars,
+      ),
+    );
+    if (!_fxController.isAnimating) _fxController.repeat();
+  }
+
+  void _triggerShake() {
+    _shakeController.forward(from: 0);
+  }
+
+  double _shakeDx() {
+    final t = _shakeController.value;
+    if (t == 0 || t == 1) return 0;
+    return math.sin(t * math.pi * 5) * 10 * (1 - t);
+  }
+
+  void _startCelebration() {
+    setState(() => _celebrating = true);
+    _celebrationController.forward(from: 0);
   }
 
   void _handleFailure() {
@@ -330,7 +414,6 @@ class _GameScreenState extends State<GameScreen> {
     } catch (e) {
       _saveError = e.toString();
     }
-
     final displayStars = serverStars ?? _session.starsEarned;
     final earned = await _awardCoins(stars: displayStars);
     if (mounted) {
@@ -340,7 +423,13 @@ class _GameScreenState extends State<GameScreen> {
         _serverStars = serverStars;
       });
     }
-    if (mounted) _showEndDialog(won: true);
+    if (mounted) {
+      // Celebrate first, then let the results dialog rise over the confetti.
+      _startCelebration();
+      Future.delayed(const Duration(milliseconds: 900), () {
+        if (mounted) _showEndDialog(won: true);
+      });
+    }
   }
 
   void _showSnackBar(String message) {
@@ -507,85 +596,125 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _StatusBar(
-              session: _session,
-              elapsedText: _formatElapsed(_elapsedMs()),
-            ),
-            const SizedBox(height: 12),
-            _PowerUpBar(
-              hintCount: _hintCount,
-              gridCount: _gridCount,
-              gridMode: _gridMode,
-              onHint: _useHint,
-              onGrid: _toggleGridMode,
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: board.cols / board.rows,
-                  child: Stack(
-                    children: [
-                      InteractiveViewer(
-                        transformationController: _zoomController,
-                        minScale: 1.0,
-                        maxScale: 3.5,
-                        panEnabled: true,
-                        scaleEnabled: true,
-                        clipBehavior: Clip.hardEdge,
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _StatusBar(
+                  session: _session,
+                  elapsedText: _formatElapsed(_elapsedMs()),
+                ),
+                const SizedBox(height: 12),
+                _PowerUpBar(
+                  hintCount: _hintCount,
+                  gridCount: _gridCount,
+                  gridMode: _gridMode,
+                  onHint: _useHint,
+                  onGrid: _toggleGridMode,
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _shakeController,
+                      builder: (context, child) => Transform.translate(
+                        offset: Offset(_shakeDx(), 0),
+                        child: child,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: board.cols / board.rows,
                         child: Stack(
                           children: [
-                            GridView.builder(
-                              physics:
-                                  const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: board.cols,
-                              ),
-                              itemCount: board.rows * board.cols,
-                              itemBuilder: (context, i) {
-                                final row = i ~/ board.cols;
-                                final col = i % board.cols;
-                                final position = Position(row, col);
-                                final arrow = board.arrowAt(position);
-                                return GestureDetector(
-                                  onTap: arrow != null
-                                      ? () => _onCellTapped(position)
-                                      : null,
-                                  child: CellWidget(
-                                    isWall: board.isWall(position),
-                                    collectible:
-                                        board.collectibleAt(position),
-                                    highlight: _highlightFor(position),
+                            InteractiveViewer(
+                              transformationController: _zoomController,
+                              minScale: 1.0,
+                              maxScale: 3.5,
+                              panEnabled: true,
+                              scaleEnabled: true,
+                              clipBehavior: Clip.hardEdge,
+                              child: Stack(
+                                children: [
+                                  GridView.builder(
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: board.cols,
+                                    ),
+                                    itemCount: board.rows * board.cols,
+                                    itemBuilder: (context, i) {
+                                      final row = i ~/ board.cols;
+                                      final col = i % board.cols;
+                                      final position = Position(row, col);
+                                      final arrow = board.arrowAt(position);
+                                      return GestureDetector(
+                                        onTap: arrow != null
+                                            ? () => _onCellTapped(position)
+                                            : null,
+                                        child: CellWidget(
+                                          isWall: board.isWall(position),
+                                          collectible:
+                                              board.collectibleAt(position),
+                                          highlight: _highlightFor(position),
+                                        ),
+                                      );
+                                    },
                                   ),
-                                );
-                              },
-                            ),
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: CustomPaint(
-                                  painter: BoardPainter(board: board),
-                                ),
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: CustomPaint(
+                                        painter: BoardPainter(board: board),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: RepaintBoundary(
+                                        child: AnimatedBuilder(
+                                          animation: _fxController,
+                                          builder: (_, _) => CustomPaint(
+                                            painter: ClearFxPainter(
+                                              effects: _clearFx,
+                                              rows: board.rows,
+                                              cols: board.cols,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
+                            if (_isPaused)
+                              Positioned.fill(
+                                child: _PauseOverlay(onResume: _togglePause),
+                              ),
                           ],
                         ),
                       ),
-                      if (_isPaused)
-                        Positioned.fill(
-                          child: _PauseOverlay(onResume: _togglePause),
-                        ),
-                    ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_celebrating)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: AnimatedBuilder(
+                    animation: _celebrationController,
+                    builder: (_, _) => CustomPaint(
+                      painter: ConfettiPainter(t: _celebrationController.value),
+                    ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -594,7 +723,6 @@ class _GameScreenState extends State<GameScreen> {
 class _PauseOverlay extends StatelessWidget {
   final VoidCallback onResume;
   const _PauseOverlay({required this.onResume});
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -633,7 +761,6 @@ class _PowerUpBar extends StatelessWidget {
   final bool gridMode;
   final VoidCallback onHint;
   final VoidCallback onGrid;
-
   const _PowerUpBar({
     required this.hintCount,
     required this.gridCount,
@@ -641,7 +768,6 @@ class _PowerUpBar extends StatelessWidget {
     required this.onHint,
     required this.onGrid,
   });
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -670,7 +796,6 @@ class _StatusBar extends StatelessWidget {
   final GameSession session;
   final String elapsedText;
   const _StatusBar({required this.session, required this.elapsedText});
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -703,7 +828,6 @@ class _Stat extends StatelessWidget {
   final String label;
   final String value;
   const _Stat({required this.label, required this.value});
-
   @override
   Widget build(BuildContext context) {
     return Column(
