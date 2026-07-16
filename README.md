@@ -107,6 +107,12 @@ Cross-cutting concerns (audio, haptics, UI feedback) are kept out of core game l
 
 ---
 
+## Economy — offline-first by design
+
+The coin wallet, inventory, and lives persist locally via `SharedPreferences`, so earning and spending are instant and work without a network. The backend exposes an equivalent JWT-protected wallet/purchase resource (see the backend README); the client's economy is adapter-ready to switch to it for server-authoritative, cross-device balances.
+
+---
+
 ## Getting started
 
 Requires Flutter SDK 3.x and a connected device or emulator.
