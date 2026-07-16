@@ -1,0 +1,48 @@
+name: Release APK
+
+# Build a release APK on the cloud (GitHub-hosted runners ship the
+# Android SDK) and attach it to the GitHub Release whenever a version
+# tag is pushed. No local Android toolchain required.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build & publish release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Rename APK to include the tag
+        run: cp build/app/outputs/flutter-apk/app-release.apk arrow-maze-${{ github.ref_name }}.apk
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Arrow Maze ${{ github.ref_name }}
+          files: arrow-maze-${{ github.ref_name }}.apk
+          generate_release_notes: true
