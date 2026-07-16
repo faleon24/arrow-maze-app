@@ -362,3 +362,22 @@ Together with the backend's parallel fix (`stars = min(movesBased, timeBased)`, 
 **Modifications made by the developer**: chose the "State holds data, GameSession holds behavior" split instead of full-strength State (where the state itself owns the `handleTap` logic and mutates the session). Avoids circular imports and keeps the tap-resolution code in one place while still giving the professor visible State classes with real behavior differences. Observer callbacks are `async` no-ops in the base class so a partial subscriber stays as one method.
 
 **Lessons learned**: patterns land best when they replace real duplication, not when they add ceremony. The Observer subscriber replaced three `unawaited(_feedback.xxx())` calls with a single `addObserver`, and the State classes eliminated three separate booleans (`isPaused`, `isCleared`, `isFailed`) as UI-guard conditions. Both patterns simplify the caller — which is the sign that they're pulling their weight.
+
+---
+
+## Critical evaluation
+
+### AI assistance share
+
+An estimated **~85–90%** of the Flutter/Dart code was produced with AI assistance (Claude Opus, via the Cowork desktop app). The developer owned the architecture (hexagonal + `get_it`), the conventions (framework-agnostic domain/application layers, no enums, AAA `should_x_when_y` tests), and the `flutter analyze` (0 issues) + `flutter test` gate on every commit. The remaining ~10–15% is hand-written wiring, `pubspec` and platform config, and manual review of every generated screen and painter.
+
+### Where AI produced incorrect or suboptimal output
+
+- **`timeMs = 0` bug.** An early submit path sent a placeholder time, so the server graded every run as an instant, perfect clear. Fixed by measuring real elapsed time and refetching server-authoritative stars (Entry 4).
+- **VS Code paste-ghost inserts.** Pasting long files through the editor intermittently duplicated or garbled lines. Mitigated by moving to a scratchpad-write + `cp` workflow instead of editor pastes.
+- **Patterns added before checking existing plumbing.** Some features were first proposed as new state or fields when the domain already carried the data — the STAR-collected count already lived in `collectedPositions`, so the leaner fix was UI-only. Review caught the over-engineering.
+- **Over-eager State pattern.** The first State-pattern proposal put tap-resolution logic inside the state objects, risking circular imports. Reworked to "State holds data, `GameSession` holds behavior," which kept resolution in one place while still exposing real State classes.
+
+### Reflection on productivity and quality
+
+117 tests / 0 analyzer issues, a full hexagonal refactor, and a broad feature set (power-ups, global lives, shop, per-level leaderboard, centralized settings, pause/timer, unlock progression, collectibles) landed in days. AI was strongest when a feature reduced to UI over existing domain plumbing, and weakest when correctness depended on runtime behavior only a human playing the game would notice (the `timeMs` bug, felt difficulty). The analyzer + test gate on every commit was what converted fast-but-plausible output into code worth trusting: the model supplied speed and correct shape, the human supplied intent, playtest, and the discipline of never merging a red tree.
