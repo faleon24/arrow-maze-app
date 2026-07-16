@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'application/usecases/music/play_background_music_usecase.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/auth_guard.dart';
-import 'presentation/screens/auth_gate.dart';
+import 'presentation/screens/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +33,7 @@ class ArrowMazeApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: const HomeScreen(),
     );
   }
 }
