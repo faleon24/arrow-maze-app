@@ -475,6 +475,16 @@ class _GameScreenState extends State<GameScreen>
                       '${l10n.oneLifeSpent}',
           ),
           actions: [
+            if (won)
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => LeaderboardScreen(level: widget.level),
+                  ),
+                ),
+                icon: const Icon(Icons.leaderboard_outlined),
+                label: Text(l10n.viewRanking),
+              ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();

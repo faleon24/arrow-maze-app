@@ -1,14 +1,28 @@
 import 'package:flutter/material.dart';
 import '../../application/usecases/leaderboard/get_leaderboard_usecase.dart';
+import '../../application/usecases/leaderboard/get_my_leaderboard_rank_usecase.dart';
 import '../../core/di/service_locator.dart';
 import '../../domain/models/leaderboard_entry.dart';
 import '../../domain/models/level.dart';
+import '../../domain/models/my_leaderboard_rank.dart';
 import '../../l10n/app_localizations.dart';
 
-/// LeaderboardScreen — top runs for a specific level.
+/// _LeaderboardData — the two reads the screen needs, fetched together:
+/// the level's top runs and (optionally) the current player's own rank.
+class _LeaderboardData {
+  final List<LeaderboardEntry> entries;
+  final MyLeaderboardRank? myRank;
+  const _LeaderboardData({required this.entries, this.myRank});
+}
+
+/// LeaderboardScreen — top runs for a specific level, plus the current
+/// player's own standing.
 ///
-/// Fetches from the backend on init; renders rank + display name +
-/// star count + wall-clock time. Public data, no auth required.
+/// Fetches the top 10 and the player's rank on init. If the player is
+/// inside the top 10 their row is highlighted; if they ranked but fell
+/// outside it, their position is pinned at the bottom ("Your rank: #N").
+/// The board itself is public; the personal rank is best-effort and
+/// simply absent when there is no session.
 class LeaderboardScreen extends StatefulWidget {
   final Level level;
   const LeaderboardScreen({super.key, required this.level});
@@ -17,14 +31,23 @@ class LeaderboardScreen extends StatefulWidget {
 }
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  final GetLeaderboardUseCase _getLeaderboard =
-      getIt<GetLeaderboardUseCase>();
-  late Future<List<LeaderboardEntry>> _entriesFuture;
+  static const int _topLimit = 10;
+  final GetLeaderboardUseCase _getLeaderboard = getIt<GetLeaderboardUseCase>();
+  final GetMyLeaderboardRankUseCase _getMyRank =
+      getIt<GetMyLeaderboardRankUseCase>();
+  late Future<_LeaderboardData> _future;
 
   @override
   void initState() {
     super.initState();
-    _entriesFuture = _getLeaderboard(levelId: widget.level.id, limit: 20);
+    _future = _load();
+  }
+
+  Future<_LeaderboardData> _load() async {
+    final entries =
+        await _getLeaderboard(levelId: widget.level.id, limit: _topLimit);
+    final myRank = await _getMyRank(levelId: widget.level.id);
+    return _LeaderboardData(entries: entries, myRank: myRank);
   }
 
   String _formatTime(int ms) {
@@ -32,7 +55,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     if (totalSeconds < 60) {
       return '${totalSeconds.toStringAsFixed(1)}s';
     }
-    final minutes = (ms ~/ 60_000);
+    final minutes = ms ~/ 60_000;
     final seconds = ((ms % 60_000) / 1000).toStringAsFixed(1);
     return '${minutes}m ${seconds}s';
   }
@@ -62,6 +85,46 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
+  Widget _starRow(int stars) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var s = 0; s < 3; s++)
+          Icon(
+            s < stars ? Icons.star : Icons.star_border,
+            size: 16,
+            color: s < stars ? Colors.amber : Colors.grey,
+          ),
+      ],
+    );
+  }
+
+  Widget _entryTile({
+    required int rank,
+    required LeaderboardEntry entry,
+    required bool isMe,
+    required AppLocalizations l10n,
+  }) {
+    return ListTile(
+      tileColor: isMe ? Colors.amber.withValues(alpha: 0.15) : null,
+      leading: _rankBadge(rank),
+      title: Text(entry.userDisplayName),
+      subtitle: Row(
+        children: [
+          _starRow(entry.stars),
+          const SizedBox(width: 12),
+          Text(_formatTime(entry.timeMs)),
+        ],
+      ),
+      trailing: isMe
+          ? Chip(
+              label: Text(l10n.youBadge),
+              visualDensity: VisualDensity.compact,
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -69,8 +132,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       appBar: AppBar(
         title: Text(l10n.leaderboardTitle(widget.level.index + 1)),
       ),
-      body: FutureBuilder<List<LeaderboardEntry>>(
-        future: _entriesFuture,
+      body: FutureBuilder<_LeaderboardData>(
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -83,7 +146,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ),
             );
           }
-          final entries = snapshot.data ?? const <LeaderboardEntry>[];
+          final data = snapshot.data ??
+              const _LeaderboardData(entries: <LeaderboardEntry>[]);
+          final entries = data.entries;
+          final myRank = data.myRank;
           if (entries.isEmpty) {
             return Center(
               child: Padding(
@@ -95,31 +161,53 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ),
             );
           }
-          return ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: entries.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final entry = entries[i];
-              return ListTile(
-                leading: _rankBadge(i + 1),
-                title: Text(entry.userDisplayName),
-                subtitle: Row(
-                  children: [
-                    for (var s = 0; s < 3; s++)
-                      Icon(
-                        s < entry.stars ? Icons.star : Icons.star_border,
-                        size: 16,
-                        color: s < entry.stars
-                            ? Colors.amber
-                            : Colors.grey,
-                      ),
-                    const SizedBox(width: 12),
-                    Text(_formatTime(entry.timeMs)),
-                  ],
+          final meInTop = myRank != null && myRank.rank <= entries.length;
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: entries.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final rank = i + 1;
+                    return _entryTile(
+                      rank: rank,
+                      entry: entries[i],
+                      isMe: myRank != null && myRank.rank == rank,
+                      l10n: l10n,
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+              if (myRank != null && !meInTop)
+                Material(
+                  elevation: 8,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            l10n.yourRank(myRank.rank),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      _entryTile(
+                        rank: myRank.rank,
+                        entry: myRank.entry,
+                        isMe: true,
+                        l10n: l10n,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           );
         },
       ),

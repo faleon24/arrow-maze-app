@@ -11,6 +11,7 @@ import '../../application/usecases/game/use_grid_highlight_usecase.dart';
 import '../../application/usecases/level/generate_level_usecase.dart';
 import '../../application/usecases/level/get_levels_usecase.dart';
 import '../../application/usecases/leaderboard/get_leaderboard_usecase.dart';
+import '../../application/usecases/leaderboard/get_my_leaderboard_rank_usecase.dart';
 import '../../application/usecases/music/play_background_music_usecase.dart';
 import '../../application/usecases/music/toggle_music_usecase.dart';
 import '../../domain/ports/music_service.dart';
@@ -101,7 +102,7 @@ Future<void> setupDI() async {
     () => const ShopHttpAdapter(),
   );
   getIt.registerLazySingleton<ILeaderboardRepository>(
-    () => const LeaderboardHttpAdapter(),
+    () => LeaderboardHttpAdapter(getIt<IAuthTokenStorage>()),
   );
   getIt.registerLazySingleton<IMusicService>(
     () => AudioPlayersMusicAdapter(),
@@ -206,6 +207,9 @@ Future<void> setupDI() async {
   // === Application use cases: leaderboard ===
   getIt.registerFactory(
     () => GetLeaderboardUseCase(getIt<ILeaderboardRepository>()),
+  );
+  getIt.registerFactory(
+    () => GetMyLeaderboardRankUseCase(getIt<ILeaderboardRepository>()),
   );
 
   // === Application use cases: music ===

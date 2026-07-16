@@ -137,6 +137,10 @@ class AppLocalizations {
   String get noRunsRecorded => _es
       ? 'Aún no hay partidas. ¡Sé el primero en la tabla!'
       : 'No runs recorded yet. Be the first to top the board!';
+  String get viewRanking => _es ? 'Ver clasificación' : 'View ranking';
+  String yourRank(Object rank) =>
+      _es ? 'Tu puesto: #$rank' : 'Your rank: #$rank';
+  String get youBadge => _es ? 'Tú' : 'You';
 
   // --- Game ----------------------------------------------------------
   String get noActivatableArrows =>
