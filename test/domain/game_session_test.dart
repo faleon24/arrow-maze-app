@@ -13,7 +13,7 @@ ArrowPath _rightSingle(String id, Position position) => ArrowPath(
       id: id,
       color: PinkColor(),
       cells: [position],
-      direction: RightDirection(),
+      direction: EastDirection(),
     );
 
 void main() {
@@ -67,7 +67,7 @@ void main() {
         id: 'a1',
         color: GreenColor(),
         cells: [Position(0, 0), Position(0, 1), Position(0, 2)],
-        direction: RightDirection(),
+        direction: EastDirection(),
       );
       final board = Board(
         rows: 1,
@@ -136,7 +136,7 @@ void main() {
         id: 'a1',
         color: BlueColor(),
         cells: [Position(0, 0), Position(0, 1)],
-        direction: RightDirection(),
+        direction: EastDirection(),
       );
       final board = Board(
         rows: 1,

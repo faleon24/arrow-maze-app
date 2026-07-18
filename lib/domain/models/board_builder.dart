@@ -148,16 +148,19 @@ class BoardBuilder {
     }
   }
 
+  static const List<String> _hexLabels = ['E', 'W', 'NE', 'NW', 'SE', 'SW'];
+
   void _validateArrowContiguous(ArrowPath arrow) {
     for (var i = 0; i < arrow.cells.length - 1; i++) {
       final prev = arrow.cells[i];
       final curr = arrow.cells[i + 1];
-      final dr = (curr.row - prev.row).abs();
-      final dc = (curr.col - prev.col).abs();
-      if (dr + dc != 1) {
+      final adjacent = _hexLabels.any(
+        (d) => DirectionFactory.fromLabel(d).apply(prev) == curr,
+      );
+      if (!adjacent) {
         throw FormatException(
-          'Arrow "${arrow.id}" cells must be orthogonally contiguous '
-          '(Manhattan-1); $prev to $curr is not adjacent',
+          'Arrow "${arrow.id}" cells must be hex-adjacent (odd-r offset); '
+          '$prev to $curr is not a neighbour',
         );
       }
     }

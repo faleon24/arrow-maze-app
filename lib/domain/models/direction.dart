@@ -1,69 +1,95 @@
 import 'position.dart';
 
-/// Direction — Strategy for the four ways an arrow can point.
-///
-/// Modeled as a class hierarchy rather than an enum (a project
-/// constraint, and the design the UML calls for): each direction knows
-/// how it moves a position and how to render itself. Behavior lives in
-/// the type, so callers never switch over a direction — they just ask it.
+/// Direction — Strategy for the 6 ways an arrow can point on a hex board
+/// (odd-r offset). apply() is parity-aware: the neighbour depends on
+/// whether the current row is even or odd. No enums (project rule).
 abstract class Direction {
-  /// Move a position one step in this direction.
   Position apply(Position from);
-
-  /// The arrow glyph used to draw this direction.
   String get symbol;
-
-  /// The backend's string label for this direction (UP/DOWN/LEFT/RIGHT).
   String get label;
 }
 
-class UpDirection extends Direction {
-  @override
-  Position apply(Position from) => Position(from.row - 1, from.col);
-  @override
-  String get symbol => '↑';
-  @override
-  String get label => 'UP';
-}
-
-class DownDirection extends Direction {
-  @override
-  Position apply(Position from) => Position(from.row + 1, from.col);
-  @override
-  String get symbol => '↓';
-  @override
-  String get label => 'DOWN';
-}
-
-class LeftDirection extends Direction {
-  @override
-  Position apply(Position from) => Position(from.row, from.col - 1);
-  @override
-  String get symbol => '←';
-  @override
-  String get label => 'LEFT';
-}
-
-class RightDirection extends Direction {
+class EastDirection extends Direction {
   @override
   Position apply(Position from) => Position(from.row, from.col + 1);
   @override
   String get symbol => '→';
   @override
-  String get label => 'RIGHT';
+  String get label => 'E';
+}
+
+class WestDirection extends Direction {
+  @override
+  Position apply(Position from) => Position(from.row, from.col - 1);
+  @override
+  String get symbol => '←';
+  @override
+  String get label => 'W';
+}
+
+class NorthEastDirection extends Direction {
+  @override
+  Position apply(Position from) {
+    final even = from.row % 2 == 0;
+    return Position(from.row - 1, even ? from.col : from.col + 1);
+  }
+  @override
+  String get symbol => '↗';
+  @override
+  String get label => 'NE';
+}
+
+class NorthWestDirection extends Direction {
+  @override
+  Position apply(Position from) {
+    final even = from.row % 2 == 0;
+    return Position(from.row - 1, even ? from.col - 1 : from.col);
+  }
+  @override
+  String get symbol => '↖';
+  @override
+  String get label => 'NW';
+}
+
+class SouthEastDirection extends Direction {
+  @override
+  Position apply(Position from) {
+    final even = from.row % 2 == 0;
+    return Position(from.row + 1, even ? from.col : from.col + 1);
+  }
+  @override
+  String get symbol => '↘';
+  @override
+  String get label => 'SE';
+}
+
+class SouthWestDirection extends Direction {
+  @override
+  Position apply(Position from) {
+    final even = from.row % 2 == 0;
+    return Position(from.row + 1, even ? from.col - 1 : from.col);
+  }
+  @override
+  String get symbol => '↙';
+  @override
+  String get label => 'SW';
 }
 
 class DirectionFactory {
   static Direction fromLabel(String label) {
     switch (label.toUpperCase()) {
-      case 'UP':
-        return UpDirection();
-      case 'DOWN':
-        return DownDirection();
-      case 'LEFT':
-        return LeftDirection();
-      case 'RIGHT':
-        return RightDirection();
+      case 'E':
+        return EastDirection();
+      case 'W':
+        return WestDirection();
+      case 'NE':
+        return NorthEastDirection();
+      case 'NW':
+        return NorthWestDirection();
+      case 'SE':
+        return SouthEastDirection();
+      case 'SW':
+        return SouthWestDirection();
       default:
         throw FormatException('Unknown direction: "$label"');
     }

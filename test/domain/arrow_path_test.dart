@@ -11,7 +11,7 @@ void main() {
         id: 'a1',
         color: PinkColor(),
         cells: [Position(0, 0), Position(0, 1), Position(0, 2)],
-        direction: RightDirection(),
+        direction: EastDirection(),
       );
 
       expect(path.head, Position(0, 2));
@@ -23,7 +23,7 @@ void main() {
         id: 'a2',
         color: BlueColor(),
         cells: [Position(1, 1)],
-        direction: UpDirection(),
+        direction: NorthEastDirection(),
       );
 
       expect(path.head, Position(1, 1));
@@ -35,7 +35,7 @@ void main() {
           id: 'a3',
           color: GreenColor(),
           cells: const [],
-          direction: DownDirection(),
+          direction: SouthEastDirection(),
         ),
         throwsArgumentError,
       );
@@ -46,7 +46,7 @@ void main() {
         id: 'a4',
         color: PurpleColor(),
         cells: [Position(0, 0)],
-        direction: LeftDirection(),
+        direction: WestDirection(),
       );
 
       expect(() => path.cells.add(Position(0, 1)), throwsUnsupportedError);
@@ -57,13 +57,13 @@ void main() {
         id: 'a5',
         color: YellowColor(),
         cells: [Position(0, 0), Position(1, 0)],
-        direction: DownDirection(),
+        direction: SouthEastDirection(),
       );
       final b = ArrowPath(
         id: 'a5',
         color: YellowColor(),
         cells: [Position(0, 0), Position(1, 0)],
-        direction: DownDirection(),
+        direction: SouthEastDirection(),
       );
 
       expect(a, b);

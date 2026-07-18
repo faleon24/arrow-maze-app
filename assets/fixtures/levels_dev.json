@@ -14,7 +14,7 @@
         {
           "id": "a1",
           "color": "PINK",
-          "direction": "UP",
+          "direction": "NE",
           "cells": ["2,0", "2,1", "1,1"]
         }
       ],
@@ -37,13 +37,13 @@
         {
           "id": "a1",
           "color": "BLUE",
-          "direction": "UP",
+          "direction": "NE",
           "cells": ["4,0", "4,1", "4,2", "3,2"]
         },
         {
           "id": "a2",
           "color": "GREEN",
-          "direction": "DOWN",
+          "direction": "E",
           "cells": ["0,4"]
         }
       ],
@@ -65,13 +65,13 @@
         {
           "id": "a1",
           "color": "PURPLE",
-          "direction": "UP",
+          "direction": "NE",
           "cells": ["5,0", "5,1", "5,2", "4,2", "3,2"]
         },
         {
           "id": "a2",
           "color": "YELLOW",
-          "direction": "DOWN",
+          "direction": "E",
           "cells": ["0,3", "0,4", "1,4", "1,5"]
         }
       ],

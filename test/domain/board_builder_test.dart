@@ -10,7 +10,7 @@ ArrowPath _rightPath(String id, List<Position> cells) => ArrowPath(
       id: id,
       color: PinkColor(),
       cells: cells,
-      direction: RightDirection(),
+      direction: EastDirection(),
     );
 
 void main() {
@@ -97,7 +97,7 @@ void main() {
           Position(2, 2),
           Position(1, 2),
         ],
-        direction: UpDirection(),
+        direction: NorthEastDirection(),
       );
       final board = BoardBuilder().withDimensions(5, 5).addArrow(l).build();
       expect(board.arrows.single.cells.length, 4);
@@ -116,7 +116,7 @@ void main() {
           Position(1, 2),
           Position(0, 2),
         ],
-        direction: UpDirection(),
+        direction: NorthEastDirection(),
       );
       final board = BoardBuilder().withDimensions(5, 5).addArrow(u).build();
       expect(board.arrows.single.cells.length, 7);
@@ -133,7 +133,7 @@ void main() {
           Position(1, 2),
           Position(2, 2),
         ],
-        direction: DownDirection(),
+        direction: SouthEastDirection(),
       );
       final board = BoardBuilder().withDimensions(5, 5).addArrow(s).build();
       expect(board.arrows.single.cells.length, 5);
@@ -180,7 +180,7 @@ void main() {
           {
             'id': 'a1',
             'color': 'PINK',
-            'direction': 'RIGHT',
+            'direction': 'E',
             'cells': ['0,0', '0,1'],
           },
         ],

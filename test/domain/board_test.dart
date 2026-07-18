@@ -14,7 +14,7 @@ Board _sampleBoard() {
     id: 'a1',
     color: PinkColor(),
     cells: [Position(1, 0), Position(1, 1)],
-    direction: RightDirection(),
+    direction: EastDirection(),
   );
   return Board(
     rows: 3,
@@ -138,7 +138,7 @@ void main() {
             id: 'x',
             color: BlueColor(),
             cells: [Position(0, 1)],
-            direction: UpDirection(),
+            direction: NorthEastDirection(),
           ),
         ),
         throwsUnsupportedError,

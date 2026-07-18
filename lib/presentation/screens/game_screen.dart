@@ -337,21 +337,20 @@ class _GameScreenState extends State<GameScreen>
   /// the edge (measuring length + any stars swept up) and queue a ClearFx.
   void _emitClearFx(ArrowPath arrow) {
     final head = arrow.head;
-    final step = arrow.direction.apply(Position(0, 0));
-    final dRow = step.row;
-    final dCol = step.col;
-    final rows = _session.board.rows;
-    final cols = _session.board.cols;
-    var r = head.row + dRow;
-    var c = head.col + dCol;
+    // Walk the ray step by step: on a hex board the delta changes with
+    // row parity, so we advance via direction.apply instead of a fixed
+    // {dRow,dCol}. The first step still gives an approximate fly-off
+    // vector for the fx animation.
+    final first = arrow.direction.apply(head);
+    final dRow = first.row - head.row;
+    final dCol = first.col - head.col;
+    var pos = first;
     var len = 0;
     final stars = <Position>[];
-    while (r >= 0 && r < rows && c >= 0 && c < cols) {
-      final p = Position(r, c);
-      if (_session.board.collectibleAt(p) != null) stars.add(p);
+    while (_session.board.contains(pos)) {
+      if (_session.board.collectibleAt(pos) != null) stars.add(pos);
       len++;
-      r += dRow;
-      c += dCol;
+      pos = arrow.direction.apply(pos);
     }
     _clearFx.add(
       ClearFx(
