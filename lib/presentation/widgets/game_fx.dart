@@ -1,30 +1,27 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../domain/models/position.dart';
+import 'hex_layout.dart';
 
 /// How long a single "arrow cleared" effect lasts.
 const Duration kClearFxDuration = Duration(milliseconds: 480);
 
 /// One in-flight clear effect: a glow that flies from the arrow's head
 /// along its ray to the board edge, a fading trail behind it, and a pop
-/// for every star the ray collected on the way out.
+/// for every star the ray collected on the way out. On a hex board the
+/// ray zig-zags, so we keep the full [rayCells] path instead of a single
+/// {dRow,dCol} delta.
 class ClearFx {
   ClearFx({
-    required this.row,
-    required this.col,
-    required this.dRow,
-    required this.dCol,
+    required this.head,
+    required this.rayCells,
     required this.color,
-    required this.rayLen,
     required this.stars,
   }) : start = DateTime.now();
 
-  final int row;
-  final int col;
-  final int dRow;
-  final int dCol;
+  final Position head;
+  final List<Position> rayCells;
   final Color color;
-  final int rayLen;
   final List<Position> stars;
   final DateTime start;
 
@@ -47,13 +44,12 @@ class ClearFxPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (effects.isEmpty) return;
-    final tileW = size.width / cols;
-    final tileH = size.height / rows;
-    final tile = tileW < tileH ? tileW : tileH;
+    final layout = HexLayout(size, rows, cols);
+    final tile = layout.h;
     for (final fx in List<ClearFx>.of(effects)) {
       final t = fx.progress;
       if (t >= 1.0) continue;
-      _paintOne(canvas, fx, t, tileW, tileH, tile);
+      _paintOne(canvas, fx, t, layout, tile);
     }
   }
 
@@ -61,29 +57,35 @@ class ClearFxPainter extends CustomPainter {
     Canvas canvas,
     ClearFx fx,
     double t,
-    double tileW,
-    double tileH,
+    HexLayout layout,
     double tile,
   ) {
-    final head = Offset((fx.col + 0.5) * tileW, (fx.row + 0.5) * tileH);
-    final step = Offset(fx.dCol * tileW, fx.dRow * tileH);
-    final end = head + step * fx.rayLen.toDouble();
+    final pts = <Offset>[
+      layout.centerOf(fx.head),
+      for (final p in fx.rayCells) layout.centerOf(p),
+    ];
 
-    // Fading trail from head to the edge — the "the ray passed here" flash.
-    canvas.drawLine(
-      head,
-      end,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = tile * 0.16
-        ..color = fx.color.withValues(alpha: (1 - t) * 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
+    // Fading trail along the ray path — "the ray passed here" flash.
+    if (pts.length >= 2) {
+      final trail = Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (var i = 1; i < pts.length; i++) {
+        trail.lineTo(pts[i].dx, pts[i].dy);
+      }
+      canvas.drawPath(
+        trail,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..strokeWidth = tile * 0.16
+          ..color = fx.color.withValues(alpha: (1 - t) * 0.55)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
+    }
 
-    // Glow flying to the edge and fading out.
+    // Glow flying along the polyline and fading out.
     final ease = Curves.easeOut.transform(t);
-    final pos = head + step * (fx.rayLen * ease);
+    final pos = _pointAlong(pts, ease);
     canvas.drawCircle(
       pos,
       tile * 0.30 * (1 - t * 0.4),
@@ -99,15 +101,37 @@ class ClearFxPainter extends CustomPainter {
 
     // Star pops for any collectibles the ray swept up.
     for (final s in fx.stars) {
-      final c = Offset((s.col + 0.5) * tileW, (s.row + 0.5) * tileH);
-      final pop = math.sin(t * math.pi); // 0 -> 1 -> 0
+      final c = layout.centerOf(s);
+      final pop = math.sin(t * math.pi);
       _drawStar(
         canvas,
         c,
-        tile * 0.34 * (1 + pop * 0.6),
+        tile * 0.20 * (1 + pop * 0.6),
         const Color(0xFFFFEE00).withValues(alpha: 1 - t * 0.3),
       );
     }
+  }
+
+  /// Point a fraction [f] (0..1) of the way along the polyline [pts].
+  Offset _pointAlong(List<Offset> pts, double f) {
+    if (pts.length == 1) return pts.first;
+    final segs = <double>[];
+    var total = 0.0;
+    for (var i = 1; i < pts.length; i++) {
+      final l = (pts[i] - pts[i - 1]).distance;
+      segs.add(l);
+      total += l;
+    }
+    if (total == 0) return pts.first;
+    var target = f * total;
+    for (var i = 0; i < segs.length; i++) {
+      if (target <= segs[i]) {
+        final frac = segs[i] == 0 ? 0.0 : target / segs[i];
+        return Offset.lerp(pts[i], pts[i + 1], frac)!;
+      }
+      target -= segs[i];
+    }
+    return pts.last;
   }
 
   void _drawStar(Canvas canvas, Offset center, double outerR, Color color) {

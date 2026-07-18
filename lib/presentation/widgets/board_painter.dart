@@ -1,50 +1,116 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../domain/models/arrow_path.dart';
 import '../../domain/models/board.dart';
-import '../../domain/models/direction.dart';
 import '../../domain/models/position.dart';
+import 'hex_layout.dart';
 
-
+/// BoardPainter — renders the whole hex board in one pass: each cell as a
+/// pointy-top hexagon (odd-r offset), then walls, stars and highlights on
+/// top of their cell, and finally the arrows as continuous polylines with
+/// a directional head. Absorbs what CellWidget used to draw per square so
+/// the offset rows line up.
 class BoardPainter extends CustomPainter {
   final Board board;
-  BoardPainter({required this.board});
+  final Map<Position, Color> highlights;
+
+  BoardPainter({required this.board, this.highlights = const {}});
+
+  static const Color _cellFill = Color(0xFF0B1030);
+  static const Color _cellLine = Color(0x3327406A);
+  static const Color _wallGlow = Color(0xFF00E0FF);
+  static const Color _wallFill = Color(0xFF0F2B44);
+  static const Color _starColor = Color(0xFFFFEE00);
+
   @override
   void paint(Canvas canvas, Size size) {
-    if (board.arrows.isEmpty) return;
-    final tileWidth = size.width / board.cols;
-    final tileHeight = size.height / board.rows;
-    // v2 boards render on a square grid via AspectRatio, so
-    // tileWidth ≈ tileHeight. Min prevents overshoot on non-square rects.
-    final tile = tileWidth < tileHeight ? tileWidth : tileHeight;
-    final strokeWidth = tile * 0.08;
+    final layout = HexLayout(size, board.rows, board.cols);
+    for (var row = 0; row < board.rows; row++) {
+      for (var col = 0; col < board.cols; col++) {
+        final pos = Position(row, col);
+        final c = layout.center(row, col);
+        final hex = layout.hexPath(c);
+        canvas.drawPath(hex, Paint()..color = _cellFill);
+        canvas.drawPath(
+          hex,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1
+            ..color = _cellLine,
+        );
+        if (board.isWall(pos)) _drawWall(canvas, hex);
+        if (board.collectibleAt(pos)?.kind == 'STAR') {
+          _drawStar(canvas, c, layout.h * 0.20);
+        }
+        final hl = highlights[pos];
+        if (hl != null) {
+          canvas.drawPath(hex, Paint()..color = hl.withValues(alpha: 0.35));
+        }
+      }
+    }
     for (final arrow in board.arrows) {
-      _paintArrow(canvas, arrow, tile, tileWidth, tileHeight, strokeWidth);
+      _paintArrow(canvas, arrow, layout);
     }
   }
-  void _paintArrow(
-    Canvas canvas,
-    ArrowPath arrow,
-    double tile,
-    double tileWidth,
-    double tileHeight,
-    double strokeWidth,
-  ) {
+
+  void _drawWall(Canvas canvas, Path hex) {
+    canvas.drawPath(
+      hex,
+      Paint()
+        ..color = _wallGlow.withValues(alpha: 0.45)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawPath(hex, Paint()..color = _wallFill);
+    canvas.drawPath(
+      hex,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = _wallGlow,
+    );
+  }
+
+  void _drawStar(Canvas canvas, Offset center, double outerR) {
+    final innerR = outerR * 0.42;
+    final path = Path();
+    for (var i = 0; i < 10; i++) {
+      final r = i.isEven ? outerR : innerR;
+      final a = -math.pi / 2 + i * math.pi / 5;
+      final p = Offset(center.dx + math.cos(a) * r, center.dy + math.sin(a) * r);
+      if (i == 0) {
+        path.moveTo(p.dx, p.dy);
+      } else {
+        path.lineTo(p.dx, p.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = _starColor.withValues(alpha: 0.65)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawPath(path, Paint()..color = _starColor);
+  }
+
+  void _paintArrow(Canvas canvas, ArrowPath arrow, HexLayout layout) {
     final color = arrow.color.hex;
-    final centers = arrow.cells
-        .map((p) => _cellCenter(p, tileWidth, tileHeight))
-        .toList();
-    if (centers.isEmpty) return;
-    final headCenter = _cellCenter(arrow.head, tileWidth, tileHeight);
-    final delta = _directionVector(arrow.direction);
-    final fwd = Offset(delta.dx * tile, delta.dy * tile);
-    // Where the arrowhead's base sits — the body line ends exactly here
-    // so head and body meet seamlessly with no visible gap.
-    final arrowheadBase = headCenter + fwd * 0.15;
+    final tile = layout.h;
+    final strokeWidth = tile * 0.08;
+    final centers = arrow.cells.map(layout.centerOf).toList();
+    final headCenter = layout.centerOf(arrow.head);
+
+    // Point the head toward the real neighbour cell (parity-aware): the
+    // fly-off direction is head -> apply(head) in canvas space.
+    final neighbour = layout.centerOf(arrow.direction.apply(arrow.head));
+    var fwd = neighbour - headCenter;
+    final dist = fwd.distance;
+    fwd = dist > 0 ? fwd / dist : const Offset(1, 0);
+
+    final arrowheadBase = headCenter + fwd * (tile * 0.15);
     final body = Path();
     if (centers.length == 1) {
-      // Single-cell arrow: draw a short stub behind the arrowhead so it
-      // reads as "arrow with a small tail" instead of a floating triangle.
-      final stubStart = headCenter - fwd * 0.25;
+      final stubStart = headCenter - fwd * (tile * 0.25);
       body.moveTo(stubStart.dx, stubStart.dy);
       body.lineTo(arrowheadBase.dx, arrowheadBase.dy);
     } else {
@@ -59,31 +125,15 @@ class BoardPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.square
-        ..strokeJoin = StrokeJoin.miter
-        ..strokeMiterLimit = 2.0
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
         ..color = color,
     );
-    _paintArrowhead(canvas, arrow, tile, tileWidth, tileHeight, color);
-  }
 
-  void _paintArrowhead(
-    Canvas canvas,
-    ArrowPath arrow,
-    double tile,
-    double tileWidth,
-    double tileHeight,
-    Color color,
-  ) {
-    final headCenter = _cellCenter(arrow.head, tileWidth, tileHeight);
-    final delta = _directionVector(arrow.direction);
-    final fwd = Offset(delta.dx * tile, delta.dy * tile);
     final side = Offset(-fwd.dy, fwd.dx);
-    // Small sharp triangle — reads as a directional pointer without
-    // eating the visual space of the body line.
-    final tip = headCenter + fwd * 0.42;
-    final base1 = headCenter + fwd * 0.15 + side * 0.16;
-    final base2 = headCenter + fwd * 0.15 - side * 0.16;
+    final tip = headCenter + fwd * (tile * 0.42);
+    final base1 = headCenter + fwd * (tile * 0.15) + side * (tile * 0.16);
+    final base2 = headCenter + fwd * (tile * 0.15) - side * (tile * 0.16);
     final head = Path()
       ..moveTo(tip.dx, tip.dy)
       ..lineTo(base1.dx, base1.dy)
@@ -91,18 +141,7 @@ class BoardPainter extends CustomPainter {
       ..close();
     canvas.drawPath(head, Paint()..color = color);
   }
-  Offset _cellCenter(Position p, double tileWidth, double tileHeight) {
-    return Offset(
-      (p.col + 0.5) * tileWidth,
-      (p.row + 0.5) * tileHeight,
-    );
-  }
-  Offset _directionVector(Direction dir) {
-    final step = dir.apply(Position(0, 0));
-    return Offset(step.col.toDouble(), step.row.toDouble());
-  }
+
   @override
-  bool shouldRepaint(covariant BoardPainter old) {
-    return !identical(old.board, board);
-  }
+  bool shouldRepaint(covariant BoardPainter old) => true;
 }

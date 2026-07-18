@@ -22,7 +22,7 @@ import '../../domain/ports/inventory_service.dart';
 import '../../domain/ports/music_service.dart';
 import '../../infrastructure/adapters/http/api_exception.dart';
 import '../auth_guard.dart';
-import '../widgets/cell_widget.dart';
+import '../widgets/hex_layout.dart';
 import '../widgets/board_painter.dart';
 import '../widgets/game_fx.dart';
 import 'leaderboard_screen.dart';
@@ -337,29 +337,22 @@ class _GameScreenState extends State<GameScreen>
   /// the edge (measuring length + any stars swept up) and queue a ClearFx.
   void _emitClearFx(ArrowPath arrow) {
     final head = arrow.head;
-    // Walk the ray step by step: on a hex board the delta changes with
-    // row parity, so we advance via direction.apply instead of a fixed
-    // {dRow,dCol}. The first step still gives an approximate fly-off
-    // vector for the fx animation.
-    final first = arrow.direction.apply(head);
-    final dRow = first.row - head.row;
-    final dCol = first.col - head.col;
-    var pos = first;
-    var len = 0;
+    // Walk the ray cell by cell (hex: the step depends on row parity)
+    // and hand the full path to ClearFx so the fly-off animation follows
+    // the real zig-zag ray instead of a straight {dRow,dCol} line.
+    final rayCells = <Position>[];
     final stars = <Position>[];
+    var pos = arrow.direction.apply(head);
     while (_session.board.contains(pos)) {
+      rayCells.add(pos);
       if (_session.board.collectibleAt(pos) != null) stars.add(pos);
-      len++;
       pos = arrow.direction.apply(pos);
     }
     _clearFx.add(
       ClearFx(
-        row: head.row,
-        col: head.col,
-        dRow: dRow,
-        dCol: dCol,
+        head: head,
+        rayCells: rayCells,
         color: arrow.color.hex,
-        rayLen: len == 0 ? 1 : len,
         stars: stars,
       ),
     );
@@ -450,6 +443,20 @@ class _GameScreenState extends State<GameScreen>
       return Colors.cyanAccent.withValues(alpha: 0.35);
     }
     return null;
+  }
+
+  /// Snapshot of every highlighted cell for the board painter. Cheap for
+  /// the small boards in play; rebuilt each frame the board repaints.
+  Map<Position, Color> _highlights() {
+    final map = <Position, Color>{};
+    for (var r = 0; r < _session.board.rows; r++) {
+      for (var c = 0; c < _session.board.cols; c++) {
+        final p = Position(r, c);
+        final hl = _highlightFor(p);
+        if (hl != null) map[p] = hl;
+      }
+    }
+    return map;
   }
 
   void _showEndDialog({required bool won}) {
@@ -633,7 +640,7 @@ class _GameScreenState extends State<GameScreen>
                         child: child,
                       ),
                       child: AspectRatio(
-                        aspectRatio: board.cols / board.rows,
+                        aspectRatio: HexLayout.aspectRatio(board.rows, board.cols),
                         child: Stack(
                           children: [
                             InteractiveViewer(
@@ -643,58 +650,52 @@ class _GameScreenState extends State<GameScreen>
                               panEnabled: true,
                               scaleEnabled: true,
                               clipBehavior: Clip.hardEdge,
-                              child: Stack(
-                                children: [
-                                  GridView.builder(
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    gridDelegate:
-                                        SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: board.cols,
-                                    ),
-                                    itemCount: board.rows * board.cols,
-                                    itemBuilder: (context, i) {
-                                      final row = i ~/ board.cols;
-                                      final col = i % board.cols;
-                                      final position = Position(row, col);
-                                      final arrow = board.arrowAt(position);
-                                      return GestureDetector(
-                                        onTap: arrow != null
-                                            ? () => _onCellTapped(position)
-                                            : null,
-                                        child: CellWidget(
-                                          isWall: board.isWall(position),
-                                          collectible:
-                                              board.collectibleAt(position),
-                                          highlight: _highlightFor(position),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final layout = HexLayout(
+                                    Size(constraints.maxWidth,
+                                        constraints.maxHeight),
+                                    board.rows,
+                                    board.cols,
+                                  );
+                                  return Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTapUp: (details) {
+                                          final cell = layout
+                                              .cellAt(details.localPosition);
+                                          if (cell != null) {
+                                            _onCellTapped(cell);
+                                          }
+                                        },
+                                        child: CustomPaint(
+                                          painter: BoardPainter(
+                                            board: board,
+                                            highlights: _highlights(),
+                                          ),
                                         ),
-                                      );
-                                    },
-                                  ),
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: CustomPaint(
-                                        painter: BoardPainter(board: board),
                                       ),
-                                    ),
-                                  ),
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: RepaintBoundary(
-                                        child: AnimatedBuilder(
-                                          animation: _fxController,
-                                          builder: (_, _) => CustomPaint(
-                                            painter: ClearFxPainter(
-                                              effects: _clearFx,
-                                              rows: board.rows,
-                                              cols: board.cols,
+                                      Positioned.fill(
+                                        child: IgnorePointer(
+                                          child: RepaintBoundary(
+                                            child: AnimatedBuilder(
+                                              animation: _fxController,
+                                              builder: (_, _) => CustomPaint(
+                                                painter: ClearFxPainter(
+                                                  effects: _clearFx,
+                                                  rows: board.rows,
+                                                  cols: board.cols,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ],
+                                    ],
+                                  );
+                                },
                               ),
                             ),
                             if (_isPaused)
