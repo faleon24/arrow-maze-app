@@ -5,19 +5,17 @@ import '../../domain/models/board.dart';
 import '../../domain/models/position.dart';
 import 'hex_layout.dart';
 
-/// BoardPainter — renders the whole hex board in one pass: each cell as a
-/// pointy-top hexagon (odd-r offset), then walls, stars and highlights on
-/// top of their cell, and finally the arrows as continuous polylines with
-/// a directional head. Absorbs what CellWidget used to draw per square so
-/// the offset rows line up.
+/// BoardPainter — draws ONLY the arrows (plus walls, collectibles and the
+/// tap-feedback highlight). The hex cells themselves are not drawn, so the
+/// arrows read as free-floating shapes on the dark background and nothing
+/// "erodes" as the board is cleared. Tap hit-testing is geometric
+/// (HexLayout.cellAt), so hiding the cells does not affect input.
 class BoardPainter extends CustomPainter {
   final Board board;
   final Map<Position, Color> highlights;
 
   BoardPainter({required this.board, this.highlights = const {}});
 
-  static const Color _cellFill = Color(0xFF0B1030);
-  static const Color _cellLine = Color(0x3327406A);
   static const Color _wallGlow = Color(0xFF00E0FF);
   static const Color _wallFill = Color(0xFF0F2B44);
   static const Color _starColor = Color(0xFFFFEE00);
@@ -25,19 +23,12 @@ class BoardPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final layout = HexLayout(size, board.rows, board.cols);
+
     for (var row = 0; row < board.rows; row++) {
       for (var col = 0; col < board.cols; col++) {
         final pos = Position(row, col);
         final c = layout.center(row, col);
         final hex = layout.hexPath(c);
-        canvas.drawPath(hex, Paint()..color = _cellFill);
-        canvas.drawPath(
-          hex,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1
-            ..color = _cellLine,
-        );
         if (board.isWall(pos)) _drawWall(canvas, hex);
         if (board.collectibleAt(pos)?.kind == 'STAR') {
           _drawStar(canvas, c, layout.h * 0.20);
@@ -100,8 +91,6 @@ class BoardPainter extends CustomPainter {
     final centers = arrow.cells.map(layout.centerOf).toList();
     final headCenter = layout.centerOf(arrow.head);
 
-    // Point the head toward the real neighbour cell (parity-aware): the
-    // fly-off direction is head -> apply(head) in canvas space.
     final neighbour = layout.centerOf(arrow.direction.apply(arrow.head));
     var fwd = neighbour - headCenter;
     final dist = fwd.distance;
